@@ -43,7 +43,12 @@ export default async function UserEditPage({ params }: RouteContext) {
       code: record.defaultLocation.code,
       name: `${record.defaultLocation.name}（已停用）`,
       type: record.defaultLocation.type,
-      typeLabel: record.defaultLocation.type,
+      typeLabel:
+  record.defaultLocation.type === "STORE"
+    ? "门店"
+    : record.defaultLocation.type === "WAREHOUSE"
+      ? "仓库"
+      : "其他",
       isActive: record.defaultLocation.isActive
     });
   }
