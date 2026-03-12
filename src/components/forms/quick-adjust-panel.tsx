@@ -55,6 +55,7 @@ export function QuickAdjustPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const deferredQuery = useDeferredValue(query);
+  const selectedItemId = selectedItem?.itemId ?? null;
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +81,10 @@ export function QuickAdjustPanel({
         setResults(payload.results);
         setRecentItems(payload.recentItems);
 
-        if (selectedItem) {
+        if (selectedItemId) {
           const nextSelected =
-            payload.results.find((item) => item.itemId === selectedItem.itemId) ??
-            payload.recentItems.find((item) => item.itemId === selectedItem.itemId) ??
+            payload.results.find((item) => item.itemId === selectedItemId) ??
+            payload.recentItems.find((item) => item.itemId === selectedItemId) ??
             null;
           setSelectedItem(nextSelected);
         }
@@ -103,7 +104,7 @@ export function QuickAdjustPanel({
     return () => {
       cancelled = true;
     };
-  }, [deferredQuery, locationId, reloadToken, selectedItem?.itemId]);
+  }, [deferredQuery, locationId, reloadToken, selectedItemId]);
 
   const displayedItems = useMemo(
     () => (query.trim() ? results : recentItems.length > 0 ? recentItems : results),
