@@ -35,6 +35,7 @@ export function UserForm({
   user
 }: UserFormProps) {
   const router = useRouter();
+  const hasRoles = roles.length > 0;
   const [form, setForm] = useState({
     username: user?.username ?? "",
     email: user?.email ?? "",
@@ -64,6 +65,10 @@ export function UserForm({
     try {
       if (form.username.trim().length === 0 || form.displayName.trim().length === 0) {
         throw new Error("用户名和显示名称不能为空");
+      }
+
+      if (!hasRoles) {
+        throw new Error("当前没有可用角色，请先检查角色基础资料");
       }
 
       if (!form.roleId) {
@@ -157,7 +162,14 @@ export function UserForm({
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium text-stone-700">角色</label>
-              <Select value={form.roleId} onChange={(event) => updateField("roleId", event.target.value)}>
+              <Select
+                disabled={!hasRoles}
+                value={form.roleId}
+                onChange={(event) => updateField("roleId", event.target.value)}
+              >
+                <option value="" disabled>
+                  {hasRoles ? "请选择角色" : "暂无可用角色"}
+                </option>
                 {roles.map((role) => (
                   <option key={role.id} value={role.id}>
                     {role.name}
@@ -194,13 +206,18 @@ export function UserForm({
           {error ? (
             <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
           ) : null}
+          {!hasRoles ? (
+            <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              当前没有可用角色，无法创建或编辑用户。请先检查角色基础资料是否已初始化。
+            </div>
+          ) : null}
           {message ? (
             <div className="rounded-2xl bg-jade-50 px-4 py-3 text-sm text-jade-800">
               {message}
             </div>
           ) : null}
 
-          <Button className="w-full sm:w-auto" type="submit" disabled={loading}>
+          <Button className="w-full sm:w-auto" type="submit" disabled={loading || !hasRoles}>
             {loading ? "保存中..." : mode === "create" ? "创建用户" : "保存用户"}
           </Button>
         </form>

@@ -11,7 +11,14 @@ export default async function UsersPage() {
   const user = await requireUser();
   assertAdmin(user);
 
-  const [bootstrap, users] = await Promise.all([getBootstrapData(user), getUsers(user)]);
+  const [bootstrap, users] = await Promise.all([
+    getBootstrapData(user, {
+      includeCategories: false,
+      includeUnits: false,
+      includeRoles: true
+    }),
+    getUsers(user)
+  ]);
 
   return (
     <div className="space-y-6">

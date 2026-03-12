@@ -18,7 +18,11 @@ export default async function UserEditPage({ params }: RouteContext) {
 
   const { id } = await params;
   const [bootstrap, record] = await Promise.all([
-    getBootstrapData(user),
+    getBootstrapData(user, {
+      includeCategories: false,
+      includeUnits: false,
+      includeRoles: true
+    }),
     prisma.user.findUnique({
       where: {
         id
