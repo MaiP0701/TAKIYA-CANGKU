@@ -17,8 +17,8 @@ export function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="min-h-screen pb-24 lg:pb-0">
       <div className="mx-auto flex min-h-screen max-w-[1600px] gap-6 px-4 py-4 sm:px-6 lg:px-8">
-        <aside className="panel sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 rounded-[32px] border border-white/70 p-5 shadow-panel lg:flex lg:flex-col">
-          <div className="mb-8">
+        <aside className="panel sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 overflow-hidden rounded-[32px] border border-white/70 p-5 shadow-panel lg:flex lg:flex-col">
+          <div className="mb-8 shrink-0">
             <div className="text-xs font-semibold uppercase tracking-[0.28em] text-tea-700">
               TAKIYA Stock Management
             </div>
@@ -30,13 +30,13 @@ export function AppShell({ user, children }: AppShellProps) {
             </p>
           </div>
 
-          <nav className="flex flex-1 flex-col gap-2">
+          <nav className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
             {visibleNavigation.map((item) => (
               <SidebarLink key={item.href} href={item.href} label={item.label} />
             ))}
           </nav>
 
-          <div className="mt-6 rounded-[24px] bg-gradient-to-br from-tea-500 via-tea-600 to-stone-900 p-5 text-white">
+          <div className="mt-6 shrink-0 rounded-[24px] bg-gradient-to-br from-tea-500 via-tea-600 to-stone-900 p-5 text-white">
             <p className="text-sm text-white/70">当前登录</p>
             <p className="mt-2 text-lg font-semibold">{user.displayName}</p>
             <p className="text-sm text-white/80">
@@ -49,7 +49,7 @@ export function AppShell({ user, children }: AppShellProps) {
           </div>
         </aside>
 
-        <main className="flex-1">
+        <main className="min-w-0 flex-1">
           <header className="panel mb-6 flex flex-col gap-4 rounded-[28px] border border-white/70 px-5 py-4 shadow-panel sm:flex-row sm:items-center sm:justify-between lg:hidden">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.24em] text-tea-700">
