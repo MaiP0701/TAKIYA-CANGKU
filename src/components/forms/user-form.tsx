@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,25 @@ type UserFormProps = {
   };
 };
 
+function buildUserFormState(
+  user: UserFormProps["user"],
+  roles: Option[],
+  locations: Option[]
+) {
+  return {
+    username: user?.username ?? "",
+    email: user?.email ?? "",
+    displayName: user?.displayName ?? "",
+    password: "",
+    roleId: user?.roleId ?? roles[0]?.id ?? "",
+    defaultLocationId:
+      user?.defaultLocationId ??
+      (locations.some((location) => location.id === user?.defaultLocationId) ? user?.defaultLocationId : "") ??
+      "",
+    isActive: user?.isActive ?? true
+  };
+}
+
 export function UserForm({
   roles,
   locations,
@@ -36,18 +55,20 @@ export function UserForm({
 }: UserFormProps) {
   const router = useRouter();
   const hasRoles = roles.length > 0;
-  const [form, setForm] = useState({
-    username: user?.username ?? "",
-    email: user?.email ?? "",
-    displayName: user?.displayName ?? "",
-    password: "",
-    roleId: user?.roleId ?? roles[0]?.id ?? "",
-    defaultLocationId: user?.defaultLocationId ?? "",
-    isActive: user?.isActive ?? true
-  });
+  const [form, setForm] = useState(() => buildUserFormState(user, roles, locations));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "update") {
+      return;
+    }
+
+    setForm(buildUserFormState(user, roles, locations));
+    setError(null);
+    setMessage(null);
+  }, [locations, mode, roles, user]);
 
   function updateField<Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) {
     setForm((current) => ({
@@ -97,15 +118,7 @@ export function UserForm({
       } else {
         setMessage("用户已创建");
         router.refresh();
-        setForm({
-          username: "",
-          email: "",
-          displayName: "",
-          password: "",
-          roleId: roles[0]?.id ?? "",
-          defaultLocationId: "",
-          isActive: true
-        });
+        setForm(buildUserFormState(undefined, roles, locations));
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "保存失败");

@@ -5,6 +5,8 @@ import { assertAdmin } from "@/lib/auth/access";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = {
   params: Promise<{
     id: string;
@@ -41,6 +43,7 @@ export default async function UnitEditPage({ params }: RouteContext) {
       </div>
 
       <UnitForm
+        key={`${unit.id}:${unit.updatedAt.toISOString()}`}
         mode="update"
         unit={{
           id: unit.id,

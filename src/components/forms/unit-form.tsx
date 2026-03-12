@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,8 @@ type UnitFormProps = {
   };
 };
 
-export function UnitForm({ mode = "create", unit }: UnitFormProps) {
-  const router = useRouter();
-  const [form, setForm] = useState({
+function buildUnitFormState(unit: UnitFormProps["unit"]) {
+  return {
     name: unit?.name ?? "",
     code: unit?.code ?? "",
     symbol: unit?.symbol ?? "",
@@ -33,10 +32,25 @@ export function UnitForm({ mode = "create", unit }: UnitFormProps) {
     sortOrder: String(unit?.sortOrder ?? 0),
     remark: unit?.remark ?? "",
     isActive: unit?.isActive ?? true
-  });
+  };
+}
+
+export function UnitForm({ mode = "create", unit }: UnitFormProps) {
+  const router = useRouter();
+  const [form, setForm] = useState(() => buildUnitFormState(unit));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "update") {
+      return;
+    }
+
+    setForm(buildUnitFormState(unit));
+    setError(null);
+    setMessage(null);
+  }, [mode, unit]);
 
   function updateField<Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) {
     setForm((current) => ({
@@ -85,15 +99,7 @@ export function UnitForm({ mode = "create", unit }: UnitFormProps) {
       } else {
         setMessage("单位已创建");
         router.refresh();
-        setForm({
-          name: "",
-          code: "",
-          symbol: "",
-          precision: "0",
-          sortOrder: "0",
-          remark: "",
-          isActive: true
-        });
+        setForm(buildUnitFormState(undefined));
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "保存失败");

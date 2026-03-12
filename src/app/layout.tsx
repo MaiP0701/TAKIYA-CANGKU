@@ -5,13 +5,13 @@ import "./globals.css";
 import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
 
 export const metadata: Metadata = {
-  title: "奶茶店库存管理系统",
-  description: "面向门店与仓库协同的奶茶店库存管理系统",
+  title: "TAKIYA库存管理系统",
+  description: "门店与仓库协同的库存管理系统",
   manifest: "/manifest.webmanifest",
-  applicationName: "奶茶店库存管理",
+  applicationName: "TAKIYA库存管理",
   appleWebApp: {
     capable: true,
-    title: "奶茶店库存管理",
+    title: "TAKIYA库存管理",
     statusBarStyle: "default"
   },
   icons: {

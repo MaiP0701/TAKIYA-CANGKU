@@ -5,6 +5,8 @@ import { assertAdmin } from "@/lib/auth/access";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = {
   params: Promise<{
     id: string;
@@ -41,6 +43,7 @@ export default async function LocationEditPage({ params }: RouteContext) {
       </div>
 
       <LocationForm
+        key={`${location.id}:${location.updatedAt.toISOString()}`}
         mode="update"
         location={{
           id: location.id,
@@ -55,4 +58,3 @@ export default async function LocationEditPage({ params }: RouteContext) {
     </div>
   );
 }
-

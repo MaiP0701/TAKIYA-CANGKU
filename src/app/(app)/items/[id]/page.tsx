@@ -6,6 +6,8 @@ import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getBootstrapData } from "@/lib/services/queries";
 
+export const dynamic = "force-dynamic";
+
 type RouteContext = {
   params: Promise<{
     id: string;
@@ -69,6 +71,7 @@ export default async function ItemEditPage({ params }: RouteContext) {
       </div>
 
       <ItemForm
+        key={`${item.id}:${item.updatedAt.toISOString()}`}
         mode="update"
         item={{
           id: item.id,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,19 +22,33 @@ type LocationFormProps = {
   };
 };
 
-export function LocationForm({ mode = "create", location }: LocationFormProps) {
-  const router = useRouter();
-  const [form, setForm] = useState({
+function buildLocationFormState(location: LocationFormProps["location"]) {
+  return {
     name: location?.name ?? "",
     code: location?.code ?? "",
     type: location?.type ?? "STORE",
     sortOrder: String(location?.sortOrder ?? 0),
     remark: location?.remark ?? "",
     isActive: location?.isActive ?? true
-  });
+  };
+}
+
+export function LocationForm({ mode = "create", location }: LocationFormProps) {
+  const router = useRouter();
+  const [form, setForm] = useState(() => buildLocationFormState(location));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "update") {
+      return;
+    }
+
+    setForm(buildLocationFormState(location));
+    setError(null);
+    setMessage(null);
+  }, [location, mode]);
 
   function updateField<Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) {
     setForm((current) => ({
@@ -76,14 +90,7 @@ export function LocationForm({ mode = "create", location }: LocationFormProps) {
       } else {
         setMessage("地点已创建");
         router.refresh();
-        setForm({
-          name: "",
-          code: "",
-          type: "STORE",
-          sortOrder: "0",
-          remark: "",
-          isActive: true
-        });
+        setForm(buildLocationFormState(undefined));
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "保存失败");

@@ -20,13 +20,13 @@ export function AppShell({ user, children }: AppShellProps) {
         <aside className="panel sticky top-4 hidden h-[calc(100vh-2rem)] w-72 shrink-0 rounded-[32px] border border-white/70 p-5 shadow-panel lg:flex lg:flex-col">
           <div className="mb-8">
             <div className="text-xs font-semibold uppercase tracking-[0.28em] text-tea-700">
-              Bubble Tea Ops
+              TAKIYA Stock Management
             </div>
             <h1 className="mt-3 text-2xl font-semibold text-stone-900">
-              奶茶店库存管理
+              TAKIYA库存管理
             </h1>
             <p className="mt-2 text-sm text-stone-500">
-              多门店与总仓协同运营
+              多门店与仓库协同运营
             </p>
           </div>
 

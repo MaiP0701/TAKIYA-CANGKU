@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,14 +36,12 @@ type ItemFormProps = {
   };
 };
 
-export function ItemForm({
-  categories,
-  units,
-  mode = "create",
-  item
-}: ItemFormProps) {
-  const router = useRouter();
-  const [form, setForm] = useState({
+function buildItemFormState(
+  item: ItemFormProps["item"],
+  categories: Option[],
+  units: Option[]
+) {
+  return {
     sku: item?.sku ?? "",
     name: item?.name ?? "",
     categoryId: item?.categoryId ?? categories[0]?.id ?? "",
@@ -57,10 +55,30 @@ export function ItemForm({
     notes: item?.notes ?? "",
     alertEnabled: item?.alertEnabled ?? true,
     isActive: item?.isActive ?? true
-  });
+  };
+}
+
+export function ItemForm({
+  categories,
+  units,
+  mode = "create",
+  item
+}: ItemFormProps) {
+  const router = useRouter();
+  const [form, setForm] = useState(() => buildItemFormState(item, categories, units));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (mode !== "update") {
+      return;
+    }
+
+    setForm(buildItemFormState(item, categories, units));
+    setError(null);
+    setMessage(null);
+  }, [mode, item, categories, units]);
 
   function updateField<Key extends keyof typeof form>(key: Key, value: (typeof form)[Key]) {
     setForm((current) => ({
@@ -114,20 +132,7 @@ export function ItemForm({
       } else {
         setMessage("物料已创建");
         router.refresh();
-        setForm((current) => ({
-          ...current,
-          sku: "",
-          name: "",
-          specification: "",
-          safetyStock: "0",
-          brand: "",
-          supplierName: "",
-          shelfLifeDays: "",
-          imageUrl: "",
-          notes: "",
-          alertEnabled: true,
-          isActive: true
-        }));
+        setForm(buildItemFormState(undefined, categories, units));
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "保存失败");
