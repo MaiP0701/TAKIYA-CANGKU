@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { assertAdmin } from "@/lib/auth/access";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminUser } from "@/lib/auth/session";
 import { getUnits } from "@/lib/services/queries";
 
 type SearchParams = Promise<{
@@ -20,8 +19,7 @@ export default async function UnitsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const user = await requireUser();
-  assertAdmin(user);
+  const user = await requireAdminUser();
   const filters = await searchParams;
   const units = await getUnits(user, filters);
 

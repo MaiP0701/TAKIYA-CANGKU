@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody, AppError } from "@/lib/api";
 import { revalidateInventoryViews, revalidateManagedResource } from "@/lib/revalidate-paths";
 import { deleteItem, updateItem } from "@/lib/services/inventory";
@@ -12,7 +12,7 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    await getApiUserOrThrow();
+    await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const item = await prisma.item.findUnique({
       where: {
@@ -53,7 +53,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const body = await readRequestBody(request);
     const item = await updateItem(user, id, {
@@ -90,7 +90,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const result = await deleteItem(user, id);
     revalidateManagedResource("items", id);

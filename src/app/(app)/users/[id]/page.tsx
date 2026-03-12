@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { UserForm } from "@/components/forms/user-form";
-import { assertAdmin } from "@/lib/auth/access";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getBootstrapData } from "@/lib/services/queries";
 
@@ -15,8 +14,7 @@ type RouteContext = {
 };
 
 export default async function UserEditPage({ params }: RouteContext) {
-  const user = await requireUser();
-  assertAdmin(user);
+  const user = await requireAdminUser();
 
   const { id } = await params;
   const [bootstrap, record] = await Promise.all([

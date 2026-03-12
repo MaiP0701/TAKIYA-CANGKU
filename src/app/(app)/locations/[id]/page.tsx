@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { LocationForm } from "@/components/forms/location-form";
-import { assertAdmin } from "@/lib/auth/access";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +13,7 @@ type RouteContext = {
 };
 
 export default async function LocationEditPage({ params }: RouteContext) {
-  const user = await requireUser();
-  assertAdmin(user);
+  await requireAdminUser();
   const { id } = await params;
 
   const location = await prisma.location.findUnique({

@@ -3,13 +3,11 @@ import { DeleteEntityButton } from "@/components/actions/delete-entity-button";
 import { UserForm } from "@/components/forms/user-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { assertAdmin } from "@/lib/auth/access";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminUser } from "@/lib/auth/session";
 import { getBootstrapData, getUsers } from "@/lib/services/queries";
 
 export default async function UsersPage() {
-  const user = await requireUser();
-  assertAdmin(user);
+  const user = await requireAdminUser();
 
   const [bootstrap, users] = await Promise.all([
     getBootstrapData(user, {

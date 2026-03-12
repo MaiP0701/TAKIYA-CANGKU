@@ -1,4 +1,4 @@
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
 import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { deleteUser, updateUser } from "@/lib/services/inventory";
@@ -11,7 +11,7 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const body = await readRequestBody(request);
 
@@ -40,7 +40,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const result = await deleteUser(user, id);
     revalidateManagedResource("users", id);

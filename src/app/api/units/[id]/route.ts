@@ -1,9 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody, AppError } from "@/lib/api";
 import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { deleteUnit, updateUnit } from "@/lib/services/inventory";
-import { assertAdmin } from "@/lib/auth/access";
 
 type RouteContext = {
   params: Promise<{
@@ -13,8 +12,7 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
-    assertAdmin(user);
+    await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const unit = await prisma.unit.findUnique({
       where: {
@@ -34,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const body = await readRequestBody(request);
     const unit = await updateUnit(user, id, {
@@ -62,7 +60,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { id } = await context.params;
     const result = await deleteUnit(user, id);
     revalidateManagedResource("units", id);

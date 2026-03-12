@@ -1,4 +1,4 @@
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
 import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { createUnit } from "@/lib/services/inventory";
@@ -6,7 +6,7 @@ import { getUnits } from "@/lib/services/queries";
 
 export async function GET(request: Request) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const { searchParams } = new URL(request.url);
     const data = await getUnits(user, {
       query: searchParams.get("query") ?? undefined,
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const body = await readRequestBody(request);
     const unit = await createUnit(user, {
       name: typeof body.name === "string" ? body.name : "",

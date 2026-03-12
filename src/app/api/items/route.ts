@@ -1,4 +1,4 @@
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
 import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { createItem } from "@/lib/services/inventory";
@@ -6,7 +6,7 @@ import { getItems } from "@/lib/services/queries";
 
 export async function GET(request: Request) {
   try {
-    await getApiUserOrThrow();
+    await getAdminApiUserOrThrow();
     const { searchParams } = new URL(request.url);
     const data = await getItems({
       query: searchParams.get("query") ?? undefined,
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const body = await readRequestBody(request);
     const item = await createItem(user, {
       sku: typeof body.sku === "string" ? body.sku : undefined,

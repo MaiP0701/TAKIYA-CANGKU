@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { isAdmin } from "@/lib/auth/access";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdminUser } from "@/lib/auth/session";
 import { getBootstrapData, getItems } from "@/lib/services/queries";
 import { formatNumber } from "@/lib/utils";
 
@@ -22,13 +21,14 @@ export default async function ItemsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const user = await requireUser();
+  const user = await requireAdminUser();
   const filters = await searchParams;
   const [bootstrap, items] = await Promise.all([
-    getBootstrapData(user),
+    getBootstrapData(user, {
+      includeRoles: false
+    }),
     getItems(filters)
   ]);
-  const admin = isAdmin(user);
 
   return (
     <div className="space-y-6">
@@ -68,24 +68,16 @@ export default async function ItemsPage({
         </CardContent>
       </Card>
 
-      {admin ? (
-        <ItemForm
-          categories={bootstrap.categories.map((category) => ({
-            id: category.id,
-            name: category.name
-          }))}
-          units={bootstrap.units.map((unit) => ({
-            id: unit.id,
-            name: unit.name
-          }))}
-        />
-      ) : (
-        <Card>
-          <CardContent className="p-6 text-sm text-stone-600">
-            当前账号为只读视图，只有管理员可以新增或编辑物料。
-          </CardContent>
-        </Card>
-      )}
+      <ItemForm
+        categories={bootstrap.categories.map((category) => ({
+          id: category.id,
+          name: category.name
+        }))}
+        units={bootstrap.units.map((unit) => ({
+          id: unit.id,
+          name: unit.name
+        }))}
+      />
 
       <Card>
         <CardHeader>
@@ -126,23 +118,19 @@ export default async function ItemsPage({
                     </div>
                   </td>
                   <td className="py-4">
-                    {admin ? (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                          className="text-tea-700 underline-offset-4 hover:underline"
-                          href={`/items/${item.id}`}
-                        >
-                          编辑
-                        </Link>
-                        <DeleteEntityButton
-                          endpoint={`/api/items/${item.id}`}
-                          entityName={item.name}
-                          kind="item"
-                        />
-                      </div>
-                    ) : (
-                      "-"
-                    )}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        className="text-tea-700 underline-offset-4 hover:underline"
+                        href={`/items/${item.id}`}
+                      >
+                        编辑
+                      </Link>
+                      <DeleteEntityButton
+                        endpoint={`/api/items/${item.id}`}
+                        entityName={item.name}
+                        kind="item"
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

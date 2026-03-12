@@ -7,7 +7,7 @@ export const navigationItems = [
   { href: "/stocktakes", label: "盘点" },
   { href: "/alerts", label: "预警" },
   { href: "/reports", label: "报表" },
-  { href: "/items", label: "物料管理" },
+  { href: "/items", label: "物料管理", adminOnly: true },
   { href: "/locations", label: "地点管理", adminOnly: true },
   { href: "/units", label: "单位管理", adminOnly: true },
   { href: "/users", label: "用户管理", adminOnly: true }

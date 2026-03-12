@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppError } from "@/lib/api";
+import { assertAdmin, isAdmin } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser } from "@/types/domain";
 
@@ -124,6 +125,16 @@ export async function requireUser() {
   return user;
 }
 
+export async function requireAdminUser() {
+  const user = await requireUser();
+
+  if (!isAdmin(user)) {
+    redirect("/");
+  }
+
+  return user;
+}
+
 export async function getApiUserOrThrow() {
   const user = await getSessionUser();
 
@@ -131,5 +142,11 @@ export async function getApiUserOrThrow() {
     throw new AppError("请先登录", 401);
   }
 
+  return user;
+}
+
+export async function getAdminApiUserOrThrow() {
+  const user = await getApiUserOrThrow();
+  assertAdmin(user);
   return user;
 }

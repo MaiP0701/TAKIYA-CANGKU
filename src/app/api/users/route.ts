@@ -1,4 +1,4 @@
-import { getApiUserOrThrow } from "@/lib/auth/session";
+import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
 import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { createUser } from "@/lib/services/inventory";
@@ -6,7 +6,7 @@ import { getUsers } from "@/lib/services/queries";
 
 export async function GET() {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const data = await getUsers(user);
     return jsonOk(data);
   } catch (error) {
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await getApiUserOrThrow();
+    const user = await getAdminApiUserOrThrow();
     const body = await readRequestBody(request);
 
     const createdUser = await createUser(user, {
