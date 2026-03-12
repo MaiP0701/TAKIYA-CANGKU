@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError } from "@/lib/api";
-import { getStoreReport } from "@/lib/services/queries";
+import { getInventoryList } from "@/lib/services/queries";
 
 function escapeCsv(value: string | number | null | undefined) {
   const stringValue = value === null || value === undefined ? "" : String(value);
@@ -15,11 +15,24 @@ export async function GET(request: Request) {
   try {
     const user = await getApiUserOrThrow();
     const { searchParams } = new URL(request.url);
-    const report = await getStoreReport(user, {
+    const rows = await getInventoryList(user, {
       locationId: searchParams.get("locationId") ?? undefined,
       categoryId: searchParams.get("categoryId") ?? undefined,
-      lowStock: searchParams.get("lowStock") ?? undefined,
-      sort: searchParams.get("sort") ?? undefined
+      lowStock: searchParams.get("lowStock") ?? undefined
+    });
+
+    const sort = searchParams.get("sort") ?? undefined;
+    const sortedRows = [...rows].sort((left, right) => {
+      switch (sort) {
+        case "quantity_desc":
+          return right.quantity - left.quantity;
+        case "quantity_asc":
+          return left.quantity - right.quantity;
+        case "low_stock_first":
+          return Number(right.isLowStock) - Number(left.isLowStock);
+        default:
+          return left.itemName.localeCompare(right.itemName, "zh-CN");
+      }
     });
 
     const lines = [
@@ -34,7 +47,7 @@ export async function GET(request: Request) {
         "最近操作人",
         "最近操作时间"
       ].join(","),
-      ...report.inventoryRows.map((row) =>
+      ...sortedRows.map((row) =>
         [
           escapeCsv(row.locationName),
           escapeCsv(row.itemName),

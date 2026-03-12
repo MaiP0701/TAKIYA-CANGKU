@@ -1,11 +1,11 @@
 import { QuickAdjustPanel } from "@/components/forms/quick-adjust-panel";
 import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { getBootstrapData } from "@/lib/services/queries";
+import { getAccessibleLocations } from "@/lib/services/queries";
 
 export default async function QuickAdjustPage() {
   const user = await requireUser();
-  const bootstrap = await getBootstrapData(user);
+  const locations = await getAccessibleLocations(user, { activeOnly: true });
 
   return (
     <div className="space-y-6">
@@ -19,7 +19,7 @@ export default async function QuickAdjustPage() {
         </p>
       </section>
 
-      {bootstrap.locations.length === 0 ? (
+      {locations.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-sm text-stone-600">
             当前账号没有可操作的启用地点。请先到地点管理中启用地点，或检查当前用户默认地点配置。
@@ -27,10 +27,11 @@ export default async function QuickAdjustPage() {
         </Card>
       ) : (
         <QuickAdjustPanel
-          locations={bootstrap.locations.map((location) => ({
+          locations={locations.map((location) => ({
             id: location.id,
             name: location.name,
-            typeLabel: location.typeLabel
+            typeLabel:
+              location.type === "STORE" ? "门店" : location.type === "WAREHOUSE" ? "仓库" : "其他"
           }))}
           defaultLocationId={user.defaultLocationId}
         />
@@ -38,4 +39,3 @@ export default async function QuickAdjustPage() {
     </div>
   );
 }
-

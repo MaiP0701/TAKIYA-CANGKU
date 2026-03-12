@@ -6,7 +6,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { requireUser } from "@/lib/auth/session";
-import { getBootstrapData, getInventoryList, getItems } from "@/lib/services/queries";
+import {
+  getBootstrapData,
+  getItemOptions,
+  getPaginatedInventoryList
+} from "@/lib/services/queries";
 import { formatDateTime, formatNumber } from "@/lib/utils";
 
 type SearchParams = Promise<{
@@ -14,7 +18,28 @@ type SearchParams = Promise<{
   categoryId?: string;
   locationId?: string;
   lowStock?: string;
+  page?: string;
 }>;
+
+function buildPageLink(
+  filters: {
+    query?: string;
+    categoryId?: string;
+    locationId?: string;
+    lowStock?: string;
+  },
+  page: number
+) {
+  const params = new URLSearchParams();
+
+  if (filters.query) params.set("query", filters.query);
+  if (filters.categoryId) params.set("categoryId", filters.categoryId);
+  if (filters.locationId) params.set("locationId", filters.locationId);
+  if (filters.lowStock) params.set("lowStock", filters.lowStock);
+  params.set("page", String(page));
+
+  return `/inventory?${params.toString()}`;
+}
 
 export default async function InventoryPage({
   searchParams
@@ -23,10 +48,20 @@ export default async function InventoryPage({
 }) {
   const user = await requireUser();
   const filters = await searchParams;
-  const [bootstrap, inventoryRows, items] = await Promise.all([
-    getBootstrapData(user),
-    getInventoryList(user, filters),
-    getItems({ active: "true" })
+  const currentPage = Math.max(1, Number(filters.page ?? "1") || 1);
+  const [bootstrap, inventory, items] = await Promise.all([
+    getBootstrapData(user, {
+      includeUnits: false,
+      includeRoles: false
+    }),
+    getPaginatedInventoryList(user, filters, {
+      page: currentPage,
+      pageSize: 50
+    }),
+    getItemOptions({
+      active: true,
+      limit: 200
+    })
   ]);
 
   const itemOptions = items.map((item) => ({
@@ -123,7 +158,9 @@ export default async function InventoryPage({
       <Card>
         <CardHeader>
           <CardTitle>当前库存</CardTitle>
-          <CardDescription>共 {inventoryRows.length} 条库存记录</CardDescription>
+          <CardDescription>
+            共 {inventory.total} 条库存记录，当前第 {inventory.page} / {inventory.totalPages} 页
+          </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -140,37 +177,75 @@ export default async function InventoryPage({
               </tr>
             </thead>
             <tbody>
-              {inventoryRows.map((row) => (
-                <tr key={row.id} className="border-b border-stone-100 text-stone-700">
-                  <td className="py-4 pr-4">
-                    <div className="font-medium text-stone-900">{row.itemName}</div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
-                      <span className="text-stone-500">{row.sku}</span>
-                      {!row.itemIsActive ? <Badge variant="muted">物料已停用</Badge> : null}
-                      {!row.locationIsActive ? <Badge variant="muted">地点已停用</Badge> : null}
-                    </div>
-                  </td>
-                  <td className="py-4 pr-4">{row.categoryName}</td>
-                  <td className="py-4 pr-4">{row.locationName}</td>
-                  <td className="py-4 pr-4">
-                    {formatNumber(row.quantity)} {row.unitName}
-                  </td>
-                  <td className="py-4 pr-4">
-                    {formatNumber(row.safetyStock)} {row.unitName}
-                  </td>
-                  <td className="py-4 pr-4">
-                    <Badge variant={row.isLowStock ? "warning" : "success"}>
-                      {row.isLowStock ? "低库存" : "正常"}
-                    </Badge>
-                  </td>
-                  <td className="py-4 pr-4">{row.lastOperatorName ?? "-"}</td>
-                  <td className="py-4">
-                    {row.lastTransactionAt ? formatDateTime(row.lastTransactionAt) : "-"}
+              {inventory.rows.length === 0 ? (
+                <tr>
+                  <td className="py-8 text-center text-stone-500" colSpan={8}>
+                    当前筛选条件下没有库存记录。
                   </td>
                 </tr>
-              ))}
+              ) : (
+                inventory.rows.map((row) => (
+                  <tr key={row.id} className="border-b border-stone-100 text-stone-700">
+                    <td className="py-4 pr-4">
+                      <div className="font-medium text-stone-900">{row.itemName}</div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                        <span className="text-stone-500">{row.sku}</span>
+                        {!row.itemIsActive ? <Badge variant="muted">物料已停用</Badge> : null}
+                        {!row.locationIsActive ? <Badge variant="muted">地点已停用</Badge> : null}
+                      </div>
+                    </td>
+                    <td className="py-4 pr-4">{row.categoryName}</td>
+                    <td className="py-4 pr-4">{row.locationName}</td>
+                    <td className="py-4 pr-4">
+                      {formatNumber(row.quantity)} {row.unitName}
+                    </td>
+                    <td className="py-4 pr-4">
+                      {formatNumber(row.safetyStock)} {row.unitName}
+                    </td>
+                    <td className="py-4 pr-4">
+                      <Badge variant={row.isLowStock ? "warning" : "success"}>
+                        {row.isLowStock ? "低库存" : "正常"}
+                      </Badge>
+                    </td>
+                    <td className="py-4 pr-4">{row.lastOperatorName ?? "-"}</td>
+                    <td className="py-4">
+                      {row.lastTransactionAt ? formatDateTime(row.lastTransactionAt) : "-"}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
+
+          {inventory.totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-3 text-sm text-stone-600">
+              <span>
+                第 {inventory.page} / {inventory.totalPages} 页
+              </span>
+              <div className="flex items-center gap-3">
+                {inventory.page > 1 ? (
+                  <Link
+                    className="font-medium text-tea-700 hover:underline"
+                    href={buildPageLink(filters, inventory.page - 1)}
+                  >
+                    上一页
+                  </Link>
+                ) : (
+                  <span className="text-stone-400">上一页</span>
+                )}
+                {inventory.page < inventory.totalPages ? (
+                  <Link
+                    className="font-medium text-tea-700 hover:underline"
+                    href={buildPageLink(filters, inventory.page + 1)}
+                  >
+                    下一页
+                  </Link>
+                ) : (
+                  <span className="text-stone-400">下一页</span>
+                )}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

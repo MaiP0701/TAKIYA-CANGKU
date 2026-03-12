@@ -12,6 +12,7 @@ type SearchParams = Promise<{
   categoryId?: string;
   lowStock?: string;
   sort?: string;
+  page?: string;
 }>;
 
 function createExportLink(filters: Record<string, string | undefined>) {
@@ -33,9 +34,16 @@ export default async function ReportsPage({
 }) {
   const user = await requireUser();
   const filters = await searchParams;
+  const currentPage = Math.max(1, Number(filters.page ?? "1") || 1);
   const [bootstrap, report] = await Promise.all([
-    getBootstrapData(user),
-    getStoreReport(user, filters)
+    getBootstrapData(user, {
+      includeUnits: false,
+      includeRoles: false
+    }),
+    getStoreReport(user, filters, {
+      page: currentPage,
+      pageSize: 50
+    })
   ]);
 
   const exportLink = createExportLink({
@@ -44,6 +52,22 @@ export default async function ReportsPage({
     lowStock: filters.lowStock,
     sort: filters.sort
   });
+
+  const previousPageLink = createExportLink({
+    locationId: filters.locationId,
+    categoryId: filters.categoryId,
+    lowStock: filters.lowStock,
+    sort: filters.sort,
+    page: report.page > 1 ? String(report.page - 1) : undefined
+  }).replace("/api/reports/inventory.csv", "/reports");
+
+  const nextPageLink = createExportLink({
+    locationId: filters.locationId,
+    categoryId: filters.categoryId,
+    lowStock: filters.lowStock,
+    sort: filters.sort,
+    page: report.page < report.totalPages ? String(report.page + 1) : undefined
+  }).replace("/api/reports/inventory.csv", "/reports");
 
   return (
     <div className="space-y-6">
@@ -183,7 +207,9 @@ export default async function ReportsPage({
         <Card>
           <CardHeader>
             <CardTitle>库存明细</CardTitle>
-            <CardDescription>按当前筛选条件展示可导出的库存快照</CardDescription>
+            <CardDescription>
+              按当前筛选条件展示可导出的库存快照，当前第 {report.page} / {report.totalPages} 页
+            </CardDescription>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -226,6 +252,30 @@ export default async function ReportsPage({
                 )}
               </tbody>
             </table>
+
+            {report.totalPages > 1 ? (
+              <div className="mt-4 flex items-center justify-between gap-3 text-sm text-stone-600">
+                <span>
+                  第 {report.page} / {report.totalPages} 页
+                </span>
+                <div className="flex items-center gap-3">
+                  {report.page > 1 ? (
+                    <a className="font-medium text-tea-700 hover:underline" href={previousPageLink}>
+                      上一页
+                    </a>
+                  ) : (
+                    <span className="text-stone-400">上一页</span>
+                  )}
+                  {report.page < report.totalPages ? (
+                    <a className="font-medium text-tea-700 hover:underline" href={nextPageLink}>
+                      下一页
+                    </a>
+                  ) : (
+                    <span className="text-stone-400">下一页</span>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 

@@ -12,14 +12,15 @@ export async function GET(request: Request) {
       throw new AppError("请选择地点", 400);
     }
 
-    const query = searchParams.get("query") ?? undefined;
+    const rawQuery = searchParams.get("query") ?? "";
+    const query = rawQuery.trim() || undefined;
     const [results, recentItems] = await Promise.all([
       searchQuickAdjustItems(user, {
         locationId,
         query,
-        limit: query ? 20 : 12
+        limit: query ? 12 : 8
       }),
-      getQuickAdjustRecentItems(user, locationId)
+      query ? Promise.resolve([]) : getQuickAdjustRecentItems(user, locationId, 8)
     ]);
 
     return jsonOk({
@@ -30,4 +31,3 @@ export async function GET(request: Request) {
     return jsonError(error);
   }
 }
-

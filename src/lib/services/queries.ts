@@ -9,6 +9,36 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import type { SessionUser } from "@/types/domain";
 
+type BootstrapOptions = {
+  includeCategories?: boolean;
+  includeUnits?: boolean;
+  includeRoles?: boolean;
+};
+
+type InventoryFilters = {
+  query?: string;
+  categoryId?: string;
+  locationId?: string;
+  lowStock?: string;
+  active?: string;
+};
+
+type InventoryLogFilters = {
+  query?: string;
+  type?: string;
+  locationId?: string;
+  operatorId?: string;
+  sourceModule?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  take?: number;
+};
+
+type PaginationOptions = {
+  page?: number;
+  pageSize?: number;
+};
+
 function toNumber(value: Prisma.Decimal | number | string | null | undefined) {
   if (value === null || value === undefined) {
     return null;
@@ -62,20 +92,26 @@ export async function getAccessibleLocations(
   return allLocations.filter((location) => scopedIds.includes(location.id));
 }
 
-export async function getBootstrapData(user: SessionUser) {
+export async function getBootstrapData(user: SessionUser, options?: BootstrapOptions) {
   const [locations, categories, units, roles] = await Promise.all([
     getAccessibleLocations(user, { activeOnly: true }),
-    prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
-    }),
-    prisma.unit.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
-    }),
-    prisma.role.findMany({
-      orderBy: [{ name: "asc" }]
-    })
+    options?.includeCategories === false
+      ? Promise.resolve([])
+      : prisma.category.findMany({
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+        }),
+    options?.includeUnits === false
+      ? Promise.resolve([])
+      : prisma.unit.findMany({
+          where: { isActive: true },
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }]
+        }),
+    options?.includeRoles === true
+      ? prisma.role.findMany({
+          orderBy: [{ name: "asc" }]
+        })
+      : Promise.resolve([])
   ]);
 
   return {
@@ -163,90 +199,194 @@ export async function getItems(filters: ItemListFilters) {
   }));
 }
 
-type InventoryFilters = {
-  query?: string;
-  categoryId?: string;
-  locationId?: string;
-  lowStock?: string;
-  active?: string;
-};
+export async function getItemOptions(filters?: {
+  active?: boolean;
+  limit?: number;
+}) {
+  const items = await prisma.item.findMany({
+    where: {
+      isActive: filters?.active === false ? undefined : true
+    },
+    select: {
+      id: true,
+      name: true
+    },
+    orderBy: {
+      name: "asc"
+    },
+    take: filters?.limit ?? 120
+  });
 
-export async function getInventoryList(user: SessionUser, filters: InventoryFilters) {
-  if (filters.locationId) {
-    assertLocationReadable(user, filters.locationId);
+  return items;
+}
+
+function sanitizePagination(options?: PaginationOptions) {
+  const page = Math.max(1, Number(options?.page ?? 1) || 1);
+  const pageSize = Math.min(100, Math.max(10, Number(options?.pageSize ?? 50) || 50));
+
+  return {
+    page,
+    pageSize,
+    skip: (page - 1) * pageSize
+  };
+}
+
+async function resolveAccessibleLocationIds(user: SessionUser, locationId?: string) {
+  if (locationId) {
+    assertLocationReadable(user, locationId);
   }
 
   const accessibleLocations = await getAccessibleLocations(user);
-  const locationIds = filters.locationId
-    ? [filters.locationId]
+  const locationIds = locationId
+    ? [locationId]
     : accessibleLocations.map((location) => location.id);
 
-  const inventoryRows = await prisma.inventory.findMany({
-    where: {
-      locationId: {
-        in: locationIds
-      },
-      item: {
-        categoryId: filters.categoryId || undefined,
-        isActive:
-          filters.active === "true" ? true : filters.active === "false" ? false : undefined,
-        OR: filters.query
-          ? [
-              {
-                name: {
-                  contains: filters.query,
-                  mode: "insensitive"
-                }
-              },
-              {
-                sku: {
-                  contains: filters.query,
-                  mode: "insensitive"
-                }
-              }
-            ]
-          : undefined
-      }
+  return {
+    accessibleLocations,
+    locationIds
+  };
+}
+
+function buildInventoryWhere(filters: InventoryFilters, locationIds: string[]) {
+  return {
+    locationId: {
+      in: locationIds
     },
-    include: {
+    item: {
+      categoryId: filters.categoryId || undefined,
+      isActive:
+        filters.active === "true" ? true : filters.active === "false" ? false : undefined,
+      OR: filters.query
+        ? [
+            {
+              name: {
+                contains: filters.query,
+                mode: "insensitive" as const
+              }
+            },
+            {
+              sku: {
+                contains: filters.query,
+                mode: "insensitive" as const
+              }
+            }
+          ]
+        : undefined
+    }
+  } satisfies Prisma.InventoryWhereInput;
+}
+
+function mapInventoryRow(
+  row: {
+    id: string;
+    itemId: string;
+    locationId: string;
+    quantity: Prisma.Decimal;
+    safetyStockOverride: Prisma.Decimal | null;
+    alertEnabledOverride: boolean | null;
+    updatedAt?: Date;
+    lastTransactionAt?: Date | null;
+    item: {
+      name: string;
+      sku: string;
+      isActive: boolean;
+      safetyStock: Prisma.Decimal;
+      alertEnabled: boolean;
+      category: {
+        name: string;
+      };
+      baseUnit: {
+        name: string;
+        symbol: string | null;
+      };
+    };
+    location: {
+      name: string;
+      isActive: boolean;
+    };
+    lastOperator?: {
+      displayName: string;
+    } | null;
+  }
+) {
+  const currentQty = toNumber(row.quantity) ?? 0;
+  const safetyStock = getThresholdValue(row);
+  const alertEnabled = getAlertEnabledValue(row);
+
+  return {
+    id: row.id,
+    itemId: row.itemId,
+    itemName: row.item.name,
+    sku: row.item.sku,
+    itemIsActive: row.item.isActive,
+    categoryName: row.item.category.name,
+    locationId: row.locationId,
+    locationName: row.location.name,
+    locationIsActive: row.location.isActive,
+    quantity: currentQty,
+    unitName: row.item.baseUnit.name,
+    unitSymbol: row.item.baseUnit.symbol,
+    safetyStock,
+    alertEnabled,
+    isLowStock: lowStockValue(currentQty, safetyStock, alertEnabled),
+    lastUpdatedAt: row.updatedAt?.toISOString() ?? null,
+    lastTransactionAt: row.lastTransactionAt?.toISOString() ?? null,
+    lastOperatorName: row.lastOperator?.displayName ?? null
+  };
+}
+
+export async function getInventoryList(user: SessionUser, filters: InventoryFilters) {
+  const { locationIds } = await resolveAccessibleLocationIds(user, filters.locationId);
+  const where = buildInventoryWhere(filters, locationIds);
+
+  const inventoryRows = await prisma.inventory.findMany({
+    where,
+    select: {
+      id: true,
+      itemId: true,
+      locationId: true,
+      quantity: true,
+      safetyStockOverride: true,
+      alertEnabledOverride: true,
+      updatedAt: true,
+      lastTransactionAt: true,
       item: {
-        include: {
-          category: true,
-          baseUnit: true
+        select: {
+          name: true,
+          sku: true,
+          isActive: true,
+          safetyStock: true,
+          alertEnabled: true,
+          category: {
+            select: {
+              name: true
+            }
+          },
+          baseUnit: {
+            select: {
+              name: true,
+              symbol: true
+            }
+          }
         }
       },
-      location: true,
-      lastOperator: true
+      location: {
+        select: {
+          name: true,
+          isActive: true,
+          sortOrder: true
+        }
+      },
+      lastOperator: {
+        select: {
+          displayName: true
+        }
+      }
     },
     orderBy: [{ location: { sortOrder: "asc" } }, { item: { name: "asc" } }]
   });
 
-  const rows = inventoryRows.map((row) => {
-    const currentQty = toNumber(row.quantity) ?? 0;
-    const safetyStock = getThresholdValue(row);
-    const alertEnabled = getAlertEnabledValue(row);
-
-    return {
-      id: row.id,
-      itemId: row.itemId,
-      itemName: row.item.name,
-      sku: row.item.sku,
-      itemIsActive: row.item.isActive,
-      categoryName: row.item.category.name,
-      locationId: row.locationId,
-      locationName: row.location.name,
-      locationIsActive: row.location.isActive,
-      quantity: currentQty,
-      unitName: row.item.baseUnit.name,
-      unitSymbol: row.item.baseUnit.symbol,
-      safetyStock,
-      alertEnabled,
-      isLowStock: lowStockValue(currentQty, safetyStock, alertEnabled),
-      lastUpdatedAt: row.updatedAt.toISOString(),
-      lastTransactionAt: row.lastTransactionAt?.toISOString() ?? null,
-      lastOperatorName: row.lastOperator?.displayName ?? null
-    };
-  });
+  const rows = inventoryRows.map(mapInventoryRow);
 
   if (filters.lowStock === "true") {
     return rows.filter((row) => row.isLowStock);
@@ -255,25 +395,91 @@ export async function getInventoryList(user: SessionUser, filters: InventoryFilt
   return rows;
 }
 
-type InventoryLogFilters = {
-  query?: string;
-  type?: string;
-  locationId?: string;
-  operatorId?: string;
-  sourceModule?: string;
-  dateFrom?: string;
-  dateTo?: string;
-};
+export async function getPaginatedInventoryList(
+  user: SessionUser,
+  filters: InventoryFilters,
+  options?: PaginationOptions
+) {
+  const { page, pageSize, skip } = sanitizePagination(options);
+  const { locationIds } = await resolveAccessibleLocationIds(user, filters.locationId);
+  const where = buildInventoryWhere(filters, locationIds);
 
-export async function getInventoryLogs(user: SessionUser, filters: InventoryLogFilters) {
-  if (filters.locationId) {
-    assertLocationReadable(user, filters.locationId);
+  if (filters.lowStock === "true") {
+    const rows = await getInventoryList(user, filters);
+    const total = rows.length;
+
+    return {
+      rows: rows.slice(skip, skip + pageSize),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize))
+    };
   }
 
-  const accessibleLocations = await getAccessibleLocations(user);
-  const locationIds = filters.locationId
-    ? [filters.locationId]
-    : accessibleLocations.map((location) => location.id);
+  const [total, inventoryRows] = await Promise.all([
+    prisma.inventory.count({ where }),
+    prisma.inventory.findMany({
+      where,
+      select: {
+        id: true,
+        itemId: true,
+        locationId: true,
+        quantity: true,
+        safetyStockOverride: true,
+        alertEnabledOverride: true,
+        updatedAt: true,
+        lastTransactionAt: true,
+        item: {
+          select: {
+            name: true,
+            sku: true,
+            isActive: true,
+            safetyStock: true,
+            alertEnabled: true,
+            category: {
+              select: {
+                name: true
+              }
+            },
+            baseUnit: {
+              select: {
+                name: true,
+                symbol: true
+              }
+            }
+          }
+        },
+        location: {
+          select: {
+            name: true,
+            isActive: true,
+            sortOrder: true
+          }
+        },
+        lastOperator: {
+          select: {
+            displayName: true
+          }
+        }
+      },
+      orderBy: [{ location: { sortOrder: "asc" } }, { item: { name: "asc" } }],
+      skip,
+      take: pageSize
+    })
+  ]);
+
+  return {
+    rows: inventoryRows.map(mapInventoryRow),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize))
+  };
+}
+
+export async function getInventoryLogs(user: SessionUser, filters: InventoryLogFilters) {
+  const { locationIds } = await resolveAccessibleLocationIds(user, filters.locationId);
 
   const logs = await prisma.inventoryChangeLog.findMany({
     where: {
@@ -301,7 +507,7 @@ export async function getInventoryLogs(user: SessionUser, filters: InventoryLogF
     orderBy: {
       createdAt: "desc"
     },
-    take: 300
+    take: filters.take ?? 100
   });
 
   return logs.map((log) => ({
@@ -407,32 +613,95 @@ export async function getAlertList(user: SessionUser, locationId?: string) {
 }
 
 export async function getDashboardSummary(user: SessionUser) {
-  const [accessibleLocations, inventoryRows, recentLogs] = await Promise.all([
-    getAccessibleLocations(user),
-    getInventoryList(user, {}),
-    getInventoryLogs(user, {})
+  const accessibleLocations = await getAccessibleLocations(user);
+  const locationIds = accessibleLocations.map((location) => location.id);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+  const [itemCount, inventoryRows, recentLogs, todayTransactionCount] = await Promise.all([
+    prisma.item.count({
+      where: {
+        isActive: true
+      }
+    }),
+    prisma.inventory.findMany({
+      where: {
+        locationId: {
+          in: locationIds
+        }
+      },
+      select: {
+        id: true,
+        itemId: true,
+        locationId: true,
+        quantity: true,
+        safetyStockOverride: true,
+        alertEnabledOverride: true,
+        item: {
+          select: {
+            name: true,
+            sku: true,
+            isActive: true,
+            safetyStock: true,
+            alertEnabled: true,
+            category: {
+              select: {
+                name: true
+              }
+            },
+            baseUnit: {
+              select: {
+                name: true,
+                symbol: true
+              }
+            }
+          }
+        },
+        location: {
+          select: {
+            name: true,
+            isActive: true
+          }
+        }
+      }
+    }),
+    getInventoryLogs(user, {
+      take: 8
+    }),
+    prisma.inventoryChangeLog.count({
+      where: {
+        locationId: {
+          in: locationIds
+        },
+        createdAt: {
+          gte: startOfToday,
+          lt: startOfTomorrow
+        }
+      }
+    })
   ]);
 
-  const itemCount = await prisma.item.count({
-    where: {
-      isActive: true
-    }
-  });
-
-  const lowStockRows = inventoryRows.filter((row) => row.isLowStock);
-  const today = new Date().toDateString();
+  const mappedRows = inventoryRows.map((row) =>
+    mapInventoryRow({
+      ...row,
+      lastOperator: null,
+      lastTransactionAt: null,
+      updatedAt: undefined
+    })
+  );
+  const lowStockRows = mappedRows.filter((row) => row.isLowStock);
 
   return {
     stats: {
       itemCount,
       lowStockCount: lowStockRows.length,
       locationCount: accessibleLocations.length,
-      todayTransactionCount: recentLogs.filter(
-        (log) => new Date(log.createdAt).toDateString() === today
-      ).length
+      todayTransactionCount
     },
     locations: accessibleLocations.map((location) => {
-      const rows = inventoryRows.filter((row) => row.locationId === location.id);
+      const rows = mappedRows.filter((row) => row.locationId === location.id);
       return {
         id: location.id,
         name: location.name,
@@ -850,18 +1119,19 @@ export async function getStoreReport(
     categoryId?: string;
     lowStock?: string;
     sort?: string;
-  }
+  },
+  options?: PaginationOptions
 ) {
-  const [inventoryRows, recentLogs] = await Promise.all([
-    getInventoryList(user, {
-      locationId: filters?.locationId,
-      categoryId: filters?.categoryId,
-      lowStock: filters?.lowStock
-    }),
-    getInventoryLogs(user, {
-      locationId: filters?.locationId
-    })
-  ]);
+  const { page, pageSize, skip } = sanitizePagination(options);
+  const inventoryRows = await getInventoryList(user, {
+    locationId: filters?.locationId,
+    categoryId: filters?.categoryId,
+    lowStock: filters?.lowStock
+  });
+  const recentLogs = await getInventoryLogs(user, {
+    locationId: filters?.locationId,
+    take: 12
+  });
 
   const sortedRows = [...inventoryRows].sort((left, right) => {
     switch (filters?.sort) {
@@ -918,7 +1188,7 @@ export async function getStoreReport(
       lowStockCount: sortedRows.filter((row) => row.isLowStock).length,
       locationCount: locationMap.size
     },
-    inventoryRows: sortedRows,
+    inventoryRows: sortedRows.slice(skip, skip + pageSize),
     categorySummary: Array.from(categoryMap.values()).sort((left, right) =>
       left.categoryName.localeCompare(right.categoryName, "zh-CN")
     ),
@@ -926,6 +1196,9 @@ export async function getStoreReport(
       left.locationName.localeCompare(right.locationName, "zh-CN")
     ),
     recentLogs: recentLogs.slice(0, 12),
-    replenishmentList: sortedRows.filter((row) => row.isLowStock).slice(0, 12)
+    replenishmentList: sortedRows.filter((row) => row.isLowStock).slice(0, 12),
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(sortedRows.length / pageSize))
   };
 }
