@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,9 +58,9 @@ export default async function ReportsPage({
               以运营视角查看地点库存、分类分布、低库存风险和最近变化，并支持导出 CSV。
             </p>
           </div>
-          <Link href={exportLink}>
-            <Button variant="secondary">导出 CSV</Button>
-          </Link>
+          <Button asChild variant="secondary">
+  <a href={exportLink}>导出 CSV</a>
+</Button>
         </div>
       </section>
 
