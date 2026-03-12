@@ -1,0 +1,35 @@
+import type { Metadata } from "next";
+import "./globals.css";
+import { RegisterServiceWorker } from "@/components/pwa/register-service-worker";
+
+export const metadata: Metadata = {
+  title: "奶茶店库存管理系统",
+  description: "面向门店与仓库协同的奶茶店库存管理系统",
+  manifest: "/manifest.webmanifest",
+  applicationName: "奶茶店库存管理",
+  appleWebApp: {
+    capable: true,
+    title: "奶茶店库存管理",
+    statusBarStyle: "default"
+  },
+  icons: {
+    icon: "/icon-192.svg",
+    apple: "/apple-touch-icon.svg"
+  }
+};
+
+export default function RootLayout({
+  children
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="zh-CN">
+      <body>
+        <RegisterServiceWorker />
+        {children}
+      </body>
+    </html>
+  );
+}
+

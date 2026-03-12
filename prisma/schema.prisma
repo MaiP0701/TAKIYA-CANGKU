@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LocationType {
+  STORE
+  WAREHOUSE
+  OTHER
+}
+
+enum TransactionType {
+  INBOUND
+  OUTBOUND
+  STORE_PICKUP
+  STORE_RETURN
+  WAREHOUSE_TRANSFER
+  STORE_TRANSFER
+  STOCKTAKE_ADJUSTMENT
+  DAMAGE
+  ADJUSTMENT
+}
+
+enum StocktakeStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id                  String                 @id @default(cuid())
+  username            String                 @unique
+  email               String?                @unique
+  passwordHash        String
+  displayName         String
+  roleId              String
+  defaultLocationId   String?
+  isActive            Boolean                @default(true)
+  role                Role                   @relation(fields: [roleId], references: [id])
+  defaultLocation     Location?              @relation("DefaultLocationUsers", fields: [defaultLocationId], references: [id])
+  createdItems        Item[]                 @relation("ItemCreator")
+  inventoryUpdated    Inventory[]            @relation("InventoryLastOperator")
+  transactions        InventoryTransaction[] @relation("TransactionOperator")
+  changeLogs          InventoryChangeLog[]   @relation("ChangeLogOperator")
+  createdStocktakes   Stocktake[]            @relation("StocktakeCreator")
+  completedStocktakes Stocktake[]            @relation("StocktakeCompleter")
+  sessions            Session[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Location {
+  id                 String                 @id @default(cuid())
+  code               String                 @unique
+  name               String                 @unique
+  type               LocationType
+  isActive           Boolean                @default(true)
+  sortOrder          Int                    @default(0)
+  remark             String?
+  defaultUsers       User[]                 @relation("DefaultLocationUsers")
+  sourceTransactions InventoryTransaction[] @relation("SourceLocation")
+  targetTransactions InventoryTransaction[] @relation("TargetLocation")
+  changeLogs         InventoryChangeLog[]   @relation("ChangeLogLocation")
+  inventories        Inventory[]
+  stocktakes         Stocktake[]
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model Category {
+  id        String     @id @default(cuid())
+  code      String     @unique
+  name      String
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+  isActive  Boolean    @default(true)
+  sortOrder Int        @default(0)
+  items     Item[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model Unit {
+  id               String                 @id @default(cuid())
+  code             String                 @unique
+  name             String                 @unique
+  symbol           String?
+  precision        Int                    @default(0)
+  isActive         Boolean                @default(true)
+  sortOrder        Int                    @default(0)
+  remark           String?
+  items            Item[]                 @relation("ItemBaseUnit")
+  transactionUnits InventoryTransaction[]
+  stocktakeUnits   StocktakeItem[]
+  changeLogs       InventoryChangeLog[]   @relation("ChangeLogUnit")
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+model Item {
+  id               String                 @id @default(cuid())
+  sku              String                 @unique
+  name             String
+  categoryId       String
+  baseUnitId       String
+  specification    String?
+  safetyStock      Decimal                @default(0) @db.Decimal(12, 3)
+  alertEnabled     Boolean                @default(true)
+  brand            String?
+  supplierName     String?
+  shelfLifeDays    Int?
+  imageUrl         String?
+  notes            String?
+  isActive         Boolean                @default(true)
+  createdById      String?
+  category         Category               @relation(fields: [categoryId], references: [id])
+  baseUnit         Unit                   @relation("ItemBaseUnit", fields: [baseUnitId], references: [id])
+  createdBy        User?                  @relation("ItemCreator", fields: [createdById], references: [id])
+  inventories      Inventory[]
+  transactions     InventoryTransaction[]
+  changeLogs       InventoryChangeLog[]   @relation("ChangeLogItem")
+  stocktakeItems   StocktakeItem[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([name])
+  @@index([categoryId, isActive])
+}
+
+model Inventory {
+  id                  String    @id @default(cuid())
+  itemId              String
+  locationId          String
+  quantity            Decimal   @default(0) @db.Decimal(12, 3)
+  safetyStockOverride Decimal?  @db.Decimal(12, 3)
+  alertEnabledOverride Boolean?
+  lastTransactionAt   DateTime?
+  lastOperatorId      String?
+  item                Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location            Location  @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  lastOperator        User?     @relation("InventoryLastOperator", fields: [lastOperatorId], references: [id])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([itemId, locationId])
+  @@index([locationId, updatedAt(sort: Desc)])
+}
+
+model InventoryTransaction {
+  id               String              @id @default(cuid())
+  transactionNo    String              @unique
+  transactionType  TransactionType
+  sourceModule     String              @default("manual")
+  referenceNo      String?
+  itemId           String
+  sourceLocationId String?
+  targetLocationId String?
+  quantity         Decimal             @db.Decimal(12, 3)
+  unitId           String
+  beforeSourceQty  Decimal?            @db.Decimal(12, 3)
+  afterSourceQty   Decimal?            @db.Decimal(12, 3)
+  beforeTargetQty  Decimal?            @db.Decimal(12, 3)
+  afterTargetQty   Decimal?            @db.Decimal(12, 3)
+  operatorId       String
+  occurredAt       DateTime            @default(now())
+  stocktakeId      String?
+  notes            String?
+  item             Item                @relation(fields: [itemId], references: [id])
+  sourceLocation   Location?           @relation("SourceLocation", fields: [sourceLocationId], references: [id])
+  targetLocation   Location?           @relation("TargetLocation", fields: [targetLocationId], references: [id])
+  unit             Unit                @relation(fields: [unitId], references: [id])
+  operator         User                @relation("TransactionOperator", fields: [operatorId], references: [id])
+  stocktake        Stocktake?          @relation(fields: [stocktakeId], references: [id])
+  adjustmentFor    StocktakeItem?      @relation("StocktakeAdjustment")
+  changeLogs       InventoryChangeLog[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([occurredAt(sort: Desc)])
+  @@index([itemId, occurredAt(sort: Desc)])
+  @@index([sourceLocationId, occurredAt(sort: Desc)])
+  @@index([targetLocationId, occurredAt(sort: Desc)])
+  @@index([sourceModule, occurredAt(sort: Desc)])
+}
+
+model InventoryChangeLog {
+  id                  String               @id @default(cuid())
+  transactionId       String
+  operationType       TransactionType
+  sourceModule        String
+  itemId              String
+  itemNameSnapshot    String
+  locationId          String
+  locationNameSnapshot String
+  unitId              String
+  unitNameSnapshot    String
+  quantityChange      Decimal              @db.Decimal(12, 3)
+  beforeQuantity      Decimal              @db.Decimal(12, 3)
+  afterQuantity       Decimal              @db.Decimal(12, 3)
+  operatorId          String
+  operatorNameSnapshot String
+  remark              String?
+  transaction         InventoryTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  item                Item                 @relation("ChangeLogItem", fields: [itemId], references: [id])
+  location            Location             @relation("ChangeLogLocation", fields: [locationId], references: [id])
+  unit                Unit                 @relation("ChangeLogUnit", fields: [unitId], references: [id])
+  operator            User                 @relation("ChangeLogOperator", fields: [operatorId], references: [id])
+  createdAt           DateTime             @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([locationId, createdAt(sort: Desc)])
+  @@index([itemId, createdAt(sort: Desc)])
+  @@index([operatorId, createdAt(sort: Desc)])
+  @@index([operationType, createdAt(sort: Desc)])
+}
+
+model Stocktake {
+  id            String                 @id @default(cuid())
+  stocktakeNo   String                 @unique
+  locationId    String
+  status        StocktakeStatus        @default(DRAFT)
+  createdById   String
+  completedById String?
+  notes         String?
+  location      Location               @relation(fields: [locationId], references: [id])
+  createdBy     User                   @relation("StocktakeCreator", fields: [createdById], references: [id])
+  completedBy   User?                  @relation("StocktakeCompleter", fields: [completedById], references: [id])
+  items         StocktakeItem[]
+  transactions  InventoryTransaction[]
+  createdAt     DateTime               @default(now())
+  completedAt   DateTime?
+  updatedAt     DateTime               @updatedAt
+
+  @@index([locationId, createdAt(sort: Desc)])
+}
+
+model StocktakeItem {
+  id                      String                @id @default(cuid())
+  stocktakeId             String
+  itemId                  String
+  unitId                  String
+  systemQuantity          Decimal               @db.Decimal(12, 3)
+  countedQuantity         Decimal               @db.Decimal(12, 3)
+  differenceQuantity      Decimal               @db.Decimal(12, 3)
+  adjustmentTransactionId String?               @unique
+  notes                   String?
+  stocktake               Stocktake             @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  item                    Item                  @relation(fields: [itemId], references: [id])
+  unit                    Unit                  @relation(fields: [unitId], references: [id])
+  adjustmentTransaction   InventoryTransaction? @relation("StocktakeAdjustment", fields: [adjustmentTransactionId], references: [id])
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  @@unique([stocktakeId, itemId])
+}
