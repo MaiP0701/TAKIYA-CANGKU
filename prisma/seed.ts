@@ -16,6 +16,39 @@ type SeedMovement = {
   stocktakeId?: string;
 };
 
+function buildStockKey(itemSku: string, locationCode: string) {
+  return `${itemSku}@@${locationCode}`;
+}
+
+function assertSeedMovementSequence(movements: SeedMovement[]) {
+  const stockByKey = new Map<string, Prisma.Decimal>();
+
+  for (const movement of movements) {
+    const quantity = new Prisma.Decimal(movement.quantity);
+
+    if (movement.sourceCode) {
+      const key = buildStockKey(movement.itemSku, movement.sourceCode);
+      const before = stockByKey.get(key) ?? new Prisma.Decimal(0);
+      const after = before.minus(quantity);
+
+      if (after.lessThan(0)) {
+        throw new Error(
+          `Seed preflight negative stock for ${movement.itemSku} at ${movement.sourceCode}: ` +
+            `current=${before.toString()}, change=-${quantity.toString()}, notes=${movement.notes}`
+        );
+      }
+
+      stockByKey.set(key, after);
+    }
+
+    if (movement.targetCode) {
+      const key = buildStockKey(movement.itemSku, movement.targetCode);
+      const before = stockByKey.get(key) ?? new Prisma.Decimal(0);
+      stockByKey.set(key, before.plus(quantity));
+    }
+  }
+}
+
 async function applyMovement(
   prismaClient: Prisma.TransactionClient,
   input: SeedMovement & {
@@ -60,7 +93,11 @@ async function applyMovement(
   const afterTargetQty = input.targetLocationId ? beforeTargetQty.plus(quantity) : null;
 
   if (afterSourceQty && afterSourceQty.lessThan(0)) {
-    throw new Error(`Seed movement would create negative stock for ${input.itemName}`);
+    throw new Error(
+      `Seed movement would create negative stock for ${input.itemName} ` +
+        `at ${input.sourceLocationName ?? input.sourceCode ?? input.sourceLocationId}: ` +
+        `current=${beforeSourceQty.toString()}, change=-${quantity.toString()}, notes=${input.notes}`
+    );
   }
 
   if (input.sourceLocationId) {
@@ -436,15 +473,18 @@ async function main() {
     { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-002", quantity: "3", sourceCode: "WAREHOUSE", targetCode: "UENO", notes: "总仓调拨绿茶茶叶", occurredAt: new Date("2026-03-04T09:30:00+08:00") },
     { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-008", quantity: "6", sourceCode: "WAREHOUSE", targetCode: "KANDA", notes: "总仓调拨珍珠", occurredAt: new Date("2026-03-04T09:35:00+08:00") },
     { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-009", quantity: "4", sourceCode: "WAREHOUSE", targetCode: "UENO", notes: "总仓调拨椰果", occurredAt: new Date("2026-03-04T09:40:00+08:00") },
+    { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-015", quantity: "3", sourceCode: "WAREHOUSE", targetCode: "UENO", notes: "总仓首批配发纸袋到上野店", occurredAt: new Date("2026-03-04T09:45:00+08:00") },
     { transactionType: "OUTBOUND", sourceModule: "quick-adjust", itemSku: "MAT-004", quantity: "7", sourceCode: "KANDA", notes: "门店日常销售消耗", occurredAt: new Date("2026-03-06T18:10:00+08:00") },
     { transactionType: "OUTBOUND", sourceModule: "quick-adjust", itemSku: "MAT-004", quantity: "6", sourceCode: "UENO", notes: "门店日常销售消耗", occurredAt: new Date("2026-03-06T18:12:00+08:00") },
     { transactionType: "OUTBOUND", sourceModule: "quick-adjust", itemSku: "MAT-012", quantity: "1", sourceCode: "KANDA", notes: "门店包材消耗", occurredAt: new Date("2026-03-06T18:15:00+08:00") },
     { transactionType: "OUTBOUND", sourceModule: "quick-adjust", itemSku: "MAT-015", quantity: "2", sourceCode: "UENO", notes: "外带纸袋消耗", occurredAt: new Date("2026-03-06T18:18:00+08:00") },
     { transactionType: "DAMAGE", sourceModule: "quick-adjust", itemSku: "MAT-011", quantity: "20", sourceCode: "WAREHOUSE", notes: "运输破损报损", occurredAt: new Date("2026-03-07T09:00:00+08:00") },
     { transactionType: "ADJUSTMENT", sourceModule: "quick-adjust", itemSku: "MAT-019", quantity: "1", targetCode: "KANDA", notes: "临时补充闭店清洁剂", occurredAt: new Date("2026-03-07T10:20:00+08:00") },
-    { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-015", quantity: "5", sourceCode: "WAREHOUSE", targetCode: "UENO", notes: "总仓调拨纸袋", occurredAt: new Date("2026-03-07T10:30:00+08:00") },
+    { transactionType: "WAREHOUSE_TRANSFER", sourceModule: "transfer", itemSku: "MAT-015", quantity: "5", sourceCode: "WAREHOUSE", targetCode: "UENO", notes: "总仓追加补货纸袋", occurredAt: new Date("2026-03-07T10:30:00+08:00") },
     { transactionType: "ADJUSTMENT", sourceModule: "inventory-page", itemSku: "MAT-018", quantity: "1", sourceCode: "KANDA", notes: "闭店盘整后修正损耗", occurredAt: new Date("2026-03-07T22:00:00+08:00") }
   ];
+
+  assertSeedMovementSequence(initialMovements);
 
   for (const movement of initialMovements) {
     const item = itemsBySku[movement.itemSku];
