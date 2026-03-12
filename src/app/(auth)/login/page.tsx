@@ -15,21 +15,21 @@ export default async function LoginPage() {
         <section className="rounded-[36px] border border-white/60 bg-gradient-to-br from-stone-900 via-tea-700 to-tea-500 p-8 text-white shadow-panel sm:p-10">
           <div className="max-w-xl">
             <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">
-              Responsive Web App
+              TAKIYA Stock Management
             </p>
             <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
-              适合门店与仓库协同的奶茶店库存管理系统
+              TAKIYA仓库管理系统
             </h1>
             <p className="mt-6 text-base leading-7 text-white/80 sm:text-lg">
-              第一版聚焦库存台账、出入库、调拨、盘点和预警。手机端可快速操作，桌面端可集中查看整体库存。
+              亲爱的伙伴：请及时填写情况、更新库存哦～
             </p>
           </div>
 
           <div className="mt-10 grid gap-4 sm:grid-cols-3">
             {[
-              ["多地点库存", "神田店 / 上野店 / 总仓"],
-              ["低库存预警", "按地点高亮缺货风险"],
-              ["完整流水", "所有库存变更可追溯"]
+              ["多地点库存", "请注意地点、单位、数量填写准确"],
+              ["低库存预警", "避免库存情况延迟，记得及时更新哦"],
+              ["变更可追溯", "谁操作，就登录谁的账号，绝不可混用"]
             ].map(([title, description]) => (
               <div
                 key={title}

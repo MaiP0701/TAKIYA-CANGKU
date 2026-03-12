@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 
 export function LoginForm() {
   const router = useRouter();
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("Admin123!");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,11 +49,11 @@ export function LoginForm() {
     <Card className="w-full max-w-md">
       <CardHeader>
         <div className="text-xs font-semibold uppercase tracking-[0.28em] text-tea-700">
-          Inventory MVP
+          Log In
         </div>
         <CardTitle className="text-2xl">登录系统</CardTitle>
         <CardDescription>
-          默认种子账号已填入，可直接进入查看。
+          请输入账号和密码后登录系统
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -88,10 +88,8 @@ export function LoginForm() {
         </form>
 
         <div className="mt-6 rounded-2xl bg-stone-100/70 p-4 text-sm text-stone-600">
-          <p>可用账号：</p>
-          <p className="mt-2">管理员：`admin / Admin123!`</p>
-          <p>店员：`kanda / Store123!`</p>
-          <p>仓库：`warehouse / Warehouse123!`</p>
+          <p>如需添加/更改账号或密码，请联系Iris或徐耕</p>
+          
         </div>
       </CardContent>
     </Card>
