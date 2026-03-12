@@ -1,5 +1,6 @@
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
+import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { createItem } from "@/lib/services/inventory";
 import { getItems } from "@/lib/services/queries";
 
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
       alertEnabled: !(body.alertEnabled === false || body.alertEnabled === "false"),
       isActive: body.isActive === false || body.isActive === "false" ? false : true
     });
+    revalidateManagedResource("items", item.id);
     return jsonOk(item, 201);
   } catch (error) {
     return jsonError(error);

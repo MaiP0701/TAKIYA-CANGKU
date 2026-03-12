@@ -1,5 +1,6 @@
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody, AppError } from "@/lib/api";
+import { revalidateInventoryViews } from "@/lib/revalidate-paths";
 import { createStocktake } from "@/lib/services/inventory";
 import { getStocktakes } from "@/lib/services/queries";
 
@@ -50,6 +51,7 @@ export async function POST(request: Request) {
       lines: parseLines(body.lines)
     });
 
+    revalidateInventoryViews();
     return jsonOk(stocktake, 201);
   } catch (error) {
     return jsonError(error);

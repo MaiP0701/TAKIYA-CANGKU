@@ -86,12 +86,12 @@ export function UserForm({
         })
       });
 
-      setMessage(mode === "create" ? "用户已创建" : "用户已更新");
-      router.refresh();
-
       if (mode === "update") {
-        router.push("/users");
+        window.location.assign("/users");
+        return;
       } else {
+        setMessage("用户已创建");
+        router.refresh();
         setForm({
           username: "",
           email: "",

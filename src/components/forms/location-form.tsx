@@ -70,12 +70,12 @@ export function LocationForm({ mode = "create", location }: LocationFormProps) {
         })
       });
 
-      setMessage(mode === "create" ? "地点已创建" : "地点已更新");
-      router.refresh();
-
       if (mode === "update") {
-        router.push("/locations");
+        window.location.assign("/locations");
+        return;
       } else {
+        setMessage("地点已创建");
+        router.refresh();
         setForm({
           name: "",
           code: "",

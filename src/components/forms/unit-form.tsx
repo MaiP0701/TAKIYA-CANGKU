@@ -79,12 +79,12 @@ export function UnitForm({ mode = "create", unit }: UnitFormProps) {
         })
       });
 
-      setMessage(mode === "create" ? "单位已创建" : "单位已更新");
-      router.refresh();
-
       if (mode === "update") {
-        router.push("/units");
+        window.location.assign("/units");
+        return;
       } else {
+        setMessage("单位已创建");
+        router.refresh();
         setForm({
           name: "",
           code: "",

@@ -1,5 +1,6 @@
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
+import { revalidateManagedResource } from "@/lib/revalidate-paths";
 import { createUser } from "@/lib/services/inventory";
 import { getUsers } from "@/lib/services/queries";
 
@@ -31,9 +32,9 @@ export async function POST(request: Request) {
       isActive: body.isActive === false || body.isActive === "false" ? false : true
     });
 
+    revalidateManagedResource("users", createdUser.id);
     return jsonOk(createdUser, 201);
   } catch (error) {
     return jsonError(error);
   }
 }
-

@@ -1,5 +1,6 @@
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
+import { revalidateInventoryViews } from "@/lib/revalidate-paths";
 import { quickAdjustInventory } from "@/lib/services/inventory";
 
 export async function POST(request: Request) {
@@ -22,9 +23,9 @@ export async function POST(request: Request) {
       notes: typeof body.notes === "string" ? body.notes : undefined,
       confirmed: body.confirmed === true || body.confirmed === "true"
     });
+    revalidateInventoryViews();
     return jsonOk(transaction, 201);
   } catch (error) {
     return jsonError(error);
   }
 }
-

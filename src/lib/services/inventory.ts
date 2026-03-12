@@ -93,6 +93,14 @@ type QuickAdjustInput = {
   confirmed?: boolean;
 };
 
+export type DeleteAction = "deleted" | "disabled_instead" | "blocked_due_to_relations";
+
+export type DeleteResult = {
+  action: DeleteAction;
+  entityId: string;
+  message: string;
+};
+
 async function runSerializable<T>(callback: SerializableCallback<T>, attempts = 3): Promise<T> {
   try {
     return await prisma.$transaction((tx) => callback(tx), {
@@ -1259,4 +1267,290 @@ export async function updateUnit(user: SessionUser, unitId: string, payload: Par
       isActive: payload.isActive
     }
   });
+}
+
+export async function deleteLocation(user: SessionUser, locationId: string): Promise<DeleteResult> {
+  assertAdmin(user);
+
+  const location = await prisma.location.findUnique({
+    where: {
+      id: locationId
+    },
+    include: {
+      _count: {
+        select: {
+          inventories: true,
+          sourceTransactions: true,
+          targetTransactions: true,
+          changeLogs: true,
+          stocktakes: true,
+          defaultUsers: true
+        }
+      }
+    }
+  });
+
+  if (!location) {
+    throw new AppError("地点不存在", 404);
+  }
+
+  const businessRelationCount =
+    location._count.inventories +
+    location._count.sourceTransactions +
+    location._count.targetTransactions +
+    location._count.changeLogs +
+    location._count.stocktakes;
+
+  if (businessRelationCount > 0) {
+    if (location.isActive) {
+      await prisma.location.update({
+        where: {
+          id: locationId
+        },
+        data: {
+          isActive: false
+        }
+      });
+    }
+
+    return {
+      action: "disabled_instead",
+      entityId: locationId,
+      message: location.isActive
+        ? "该地点已有库存、流水、盘点或调拨等业务数据，不能物理删除，系统已自动改为停用。"
+        : "该地点已有库存、流水、盘点或调拨等业务数据，不能物理删除，当前保持停用状态。"
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({
+      where: {
+        defaultLocationId: locationId
+      },
+      data: {
+        defaultLocationId: null
+      }
+    });
+
+    await tx.location.delete({
+      where: {
+        id: locationId
+      }
+    });
+  });
+
+  return {
+    action: "deleted",
+    entityId: locationId,
+    message: "地点已删除。"
+  };
+}
+
+export async function deleteItem(user: SessionUser, itemId: string): Promise<DeleteResult> {
+  assertAdmin(user);
+
+  const item = await prisma.item.findUnique({
+    where: {
+      id: itemId
+    },
+    include: {
+      _count: {
+        select: {
+          inventories: true,
+          transactions: true,
+          changeLogs: true,
+          stocktakeItems: true
+        }
+      }
+    }
+  });
+
+  if (!item) {
+    throw new AppError("物料不存在", 404);
+  }
+
+  const businessRelationCount =
+    item._count.inventories +
+    item._count.transactions +
+    item._count.changeLogs +
+    item._count.stocktakeItems;
+
+  if (businessRelationCount > 0) {
+    if (item.isActive) {
+      await prisma.item.update({
+        where: {
+          id: itemId
+        },
+        data: {
+          isActive: false
+        }
+      });
+    }
+
+    return {
+      action: "disabled_instead",
+      entityId: itemId,
+      message: item.isActive
+        ? "该物料已有库存、流水、盘点或调拨等业务数据，不能物理删除，系统已自动改为停用。"
+        : "该物料已有库存、流水、盘点或调拨等业务数据，不能物理删除，当前保持停用状态。"
+    };
+  }
+
+  await prisma.item.delete({
+    where: {
+      id: itemId
+    }
+  });
+
+  return {
+    action: "deleted",
+    entityId: itemId,
+    message: "物料已删除。"
+  };
+}
+
+export async function deleteUnit(user: SessionUser, unitId: string): Promise<DeleteResult> {
+  assertAdmin(user);
+
+  const unit = await prisma.unit.findUnique({
+    where: {
+      id: unitId
+    },
+    include: {
+      _count: {
+        select: {
+          items: true,
+          transactionUnits: true,
+          stocktakeUnits: true,
+          changeLogs: true
+        }
+      }
+    }
+  });
+
+  if (!unit) {
+    throw new AppError("单位不存在", 404);
+  }
+
+  const relationCount =
+    unit._count.items +
+    unit._count.transactionUnits +
+    unit._count.stocktakeUnits +
+    unit._count.changeLogs;
+
+  if (relationCount > 0) {
+    return {
+      action: "blocked_due_to_relations",
+      entityId: unitId,
+      message: "该单位已被物料或历史业务数据使用，不能删除。请改用停用方式保留历史数据一致性。"
+    };
+  }
+
+  await prisma.unit.delete({
+    where: {
+      id: unitId
+    }
+  });
+
+  return {
+    action: "deleted",
+    entityId: unitId,
+    message: "单位已删除。"
+  };
+}
+
+export async function deleteUser(user: SessionUser, userId: string): Promise<DeleteResult> {
+  assertAdmin(user);
+
+  if (user.id === userId) {
+    throw new AppError("不能删除当前登录用户", 400);
+  }
+
+  const targetUser = await prisma.user.findUnique({
+    where: {
+      id: userId
+    },
+    include: {
+      _count: {
+        select: {
+          createdItems: true,
+          inventoryUpdated: true,
+          transactions: true,
+          changeLogs: true,
+          createdStocktakes: true,
+          completedStocktakes: true,
+          sessions: true
+        }
+      }
+    }
+  });
+
+  if (!targetUser) {
+    throw new AppError("用户不存在", 404);
+  }
+
+  const businessRelationCount =
+    targetUser._count.inventoryUpdated +
+    targetUser._count.transactions +
+    targetUser._count.changeLogs +
+    targetUser._count.createdStocktakes +
+    targetUser._count.completedStocktakes;
+
+  if (businessRelationCount > 0) {
+    await prisma.$transaction(async (tx) => {
+      await tx.session.deleteMany({
+        where: {
+          userId
+        }
+      });
+
+      if (targetUser.isActive) {
+        await tx.user.update({
+          where: {
+            id: userId
+          },
+          data: {
+            isActive: false
+          }
+        });
+      }
+    });
+
+    return {
+      action: "disabled_instead",
+      entityId: userId,
+      message: targetUser.isActive
+        ? "该用户已有库存操作、盘点或日志记录，不能物理删除，系统已自动停用并禁止继续登录。"
+        : "该用户已有库存操作、盘点或日志记录，不能物理删除，当前保持停用状态。"
+    };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.session.deleteMany({
+      where: {
+        userId
+      }
+    });
+
+    await tx.item.updateMany({
+      where: {
+        createdById: userId
+      },
+      data: {
+        createdById: null
+      }
+    });
+
+    await tx.user.delete({
+      where: {
+        id: userId
+      }
+    });
+  });
+
+  return {
+    action: "deleted",
+    entityId: userId,
+    message: "用户已删除。"
+  };
 }

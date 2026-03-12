@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteEntityButton } from "@/components/actions/delete-entity-button";
 import { UnitForm } from "@/components/forms/unit-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,9 +87,16 @@ export default async function UnitsPage({
                     </Badge>
                   </td>
                   <td className="py-4">
-                    <Link className="text-tea-700 hover:underline" href={`/units/${unit.id}`}>
-                      编辑
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link className="text-tea-700 hover:underline" href={`/units/${unit.id}`}>
+                        编辑
+                      </Link>
+                      <DeleteEntityButton
+                        endpoint={`/api/units/${unit.id}`}
+                        entityName={unit.name}
+                        kind="unit"
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -99,4 +107,3 @@ export default async function UnitsPage({
     </div>
   );
 }
-

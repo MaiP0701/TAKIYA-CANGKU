@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteEntityButton } from "@/components/actions/delete-entity-button";
 import { ItemForm } from "@/components/forms/item-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,9 +127,19 @@ export default async function ItemsPage({
                   </td>
                   <td className="py-4">
                     {admin ? (
-                      <Link className="text-tea-700 underline-offset-4 hover:underline" href={`/items/${item.id}`}>
-                        编辑
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link
+                          className="text-tea-700 underline-offset-4 hover:underline"
+                          href={`/items/${item.id}`}
+                        >
+                          编辑
+                        </Link>
+                        <DeleteEntityButton
+                          endpoint={`/api/items/${item.id}`}
+                          entityName={item.name}
+                          kind="item"
+                        />
+                      </div>
                     ) : (
                       "-"
                     )}

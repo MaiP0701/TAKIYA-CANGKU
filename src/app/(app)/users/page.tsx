@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteEntityButton } from "@/components/actions/delete-entity-button";
 import { UserForm } from "@/components/forms/user-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,9 +66,23 @@ export default async function UsersPage() {
                     </Badge>
                   </td>
                   <td className="py-4">
-                    <Link className="text-tea-700 underline-offset-4 hover:underline" href={`/users/${record.id}`}>
-                      编辑
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        className="text-tea-700 underline-offset-4 hover:underline"
+                        href={`/users/${record.id}`}
+                      >
+                        编辑
+                      </Link>
+                      {record.id === user.id ? (
+                        <span className="text-xs text-stone-400">当前账号</span>
+                      ) : (
+                        <DeleteEntityButton
+                          endpoint={`/api/users/${record.id}`}
+                          entityName={record.displayName}
+                          kind="user"
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -78,4 +93,3 @@ export default async function UsersPage() {
     </div>
   );
 }
-

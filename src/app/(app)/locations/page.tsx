@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DeleteEntityButton } from "@/components/actions/delete-entity-button";
 import { LocationForm } from "@/components/forms/location-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -86,9 +87,19 @@ export default async function LocationsPage({
                   </td>
                   <td className="py-4 pr-4">{location.remark ?? "-"}</td>
                   <td className="py-4">
-                    <Link className="text-tea-700 hover:underline" href={`/locations/${location.id}`}>
-                      编辑
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        className="text-tea-700 hover:underline"
+                        href={`/locations/${location.id}`}
+                      >
+                        编辑
+                      </Link>
+                      <DeleteEntityButton
+                        endpoint={`/api/locations/${location.id}`}
+                        entityName={location.name}
+                        kind="location"
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -99,4 +110,3 @@ export default async function LocationsPage({
     </div>
   );
 }
-

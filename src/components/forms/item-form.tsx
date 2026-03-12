@@ -108,12 +108,12 @@ export function ItemForm({
         })
       });
 
-      setMessage(mode === "create" ? "物料已创建" : "物料已更新");
-      router.refresh();
-
       if (mode === "update") {
-        router.push("/items");
+        window.location.assign("/items");
+        return;
       } else {
+        setMessage("物料已创建");
+        router.refresh();
         setForm((current) => ({
           ...current,
           sku: "",

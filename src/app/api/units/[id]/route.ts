@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db/prisma";
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody, AppError } from "@/lib/api";
-import { updateUnit } from "@/lib/services/inventory";
+import { revalidateManagedResource } from "@/lib/revalidate-paths";
+import { deleteUnit, updateUnit } from "@/lib/services/inventory";
 import { assertAdmin } from "@/lib/auth/access";
 
 type RouteContext = {
@@ -52,9 +53,22 @@ export async function PATCH(request: Request, context: RouteContext) {
       isActive:
         body.isActive === undefined ? undefined : !(body.isActive === false || body.isActive === "false")
     });
+    revalidateManagedResource("units", id);
     return jsonOk(unit);
   } catch (error) {
     return jsonError(error);
   }
 }
 
+export async function DELETE(_request: Request, context: RouteContext) {
+  try {
+    const user = await getApiUserOrThrow();
+    const { id } = await context.params;
+    const result = await deleteUnit(user, id);
+    revalidateManagedResource("units", id);
+    revalidateManagedResource("items");
+    return jsonOk(result);
+  } catch (error) {
+    return jsonError(error);
+  }
+}

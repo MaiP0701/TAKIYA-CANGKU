@@ -1,6 +1,7 @@
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody } from "@/lib/api";
-import { updateUser } from "@/lib/services/inventory";
+import { revalidateManagedResource } from "@/lib/revalidate-paths";
+import { deleteUser, updateUser } from "@/lib/services/inventory";
 
 type RouteContext = {
   params: Promise<{
@@ -30,7 +31,20 @@ export async function PATCH(request: Request, context: RouteContext) {
         body.isActive === undefined ? undefined : !(body.isActive === false || body.isActive === "false")
     });
 
+    revalidateManagedResource("users", id);
     return jsonOk(updatedUser);
+  } catch (error) {
+    return jsonError(error);
+  }
+}
+
+export async function DELETE(_request: Request, context: RouteContext) {
+  try {
+    const user = await getApiUserOrThrow();
+    const { id } = await context.params;
+    const result = await deleteUser(user, id);
+    revalidateManagedResource("users", id);
+    return jsonOk(result);
   } catch (error) {
     return jsonError(error);
   }
