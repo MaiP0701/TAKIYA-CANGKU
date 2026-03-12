@@ -1,6 +1,10 @@
 import { isAdmin } from "@/lib/auth/access";
 import { requireUser } from "@/lib/auth/session";
-import { getTransactions, getUsers, getBootstrapData } from "@/lib/services/queries";
+import {
+  getBootstrapData,
+  getPaginatedTransactions,
+  getUsers
+} from "@/lib/services/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +20,7 @@ type SearchParams = Promise<{
   sourceModule?: string;
   dateFrom?: string;
   dateTo?: string;
+  page?: string;
 }>;
 
 const operationTypes = [
@@ -38,6 +43,26 @@ const sourceModules = [
   ["stocktake", "盘点"]
 ];
 
+function createTransactionsPageLink(
+  filters: Record<string, string | undefined>,
+  page?: number
+) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key !== "page" && value) {
+      params.set(key, value);
+    }
+  });
+
+  if (page && page > 1) {
+    params.set("page", String(page));
+  }
+
+  const query = params.toString();
+  return query ? `/transactions?${query}` : "/transactions";
+}
+
 export default async function TransactionsPage({
   searchParams
 }: {
@@ -45,11 +70,21 @@ export default async function TransactionsPage({
 }) {
   const user = await requireUser();
   const filters = await searchParams;
-  const [bootstrap, logs, users] = await Promise.all([
-    getBootstrapData(user),
-    getTransactions(user, filters),
+  const currentPage = Math.max(1, Number(filters.page ?? "1") || 1);
+  const [bootstrap, logPage, users] = await Promise.all([
+    getBootstrapData(user, {
+      includeCategories: false,
+      includeUnits: false,
+      includeRoles: false
+    }),
+    getPaginatedTransactions(user, filters, {
+      page: currentPage,
+      pageSize: 50
+    }),
     isAdmin(user) ? getUsers(user) : Promise.resolve([])
   ]);
+  const previousPageLink = createTransactionsPageLink(filters, logPage.page - 1);
+  const nextPageLink = createTransactionsPageLink(filters, logPage.page + 1);
 
   return (
     <div className="space-y-6">
@@ -113,7 +148,9 @@ export default async function TransactionsPage({
       <Card>
         <CardHeader>
           <CardTitle>日志明细</CardTitle>
-          <CardDescription>共 {logs.length} 条库存变化记录</CardDescription>
+          <CardDescription>
+            共 {logPage.total} 条库存变化记录，当前第 {logPage.page} / {logPage.totalPages} 页
+          </CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -131,14 +168,14 @@ export default async function TransactionsPage({
               </tr>
             </thead>
             <tbody>
-              {logs.length === 0 ? (
+              {logPage.rows.length === 0 ? (
                 <tr>
                   <td className="py-8 text-center text-stone-500" colSpan={9}>
                     当前筛选条件下没有库存日志。
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
+                logPage.rows.map((log) => (
                   <tr key={log.id} className="border-b border-stone-100 text-stone-700">
                     <td className="py-4 pr-4">{formatDateTime(log.createdAt)}</td>
                     <td className="py-4 pr-4">{log.operatorName}</td>
@@ -173,6 +210,37 @@ export default async function TransactionsPage({
               )}
             </tbody>
           </table>
+          {logPage.totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-stone-200/70 pt-4 text-sm text-stone-600">
+              <span>
+                第 {logPage.page} / {logPage.totalPages} 页
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  aria-disabled={logPage.page <= 1}
+                  className={`rounded-md border px-3 py-2 ${
+                    logPage.page <= 1
+                      ? "pointer-events-none border-stone-200 text-stone-400"
+                      : "border-stone-300 text-stone-700 hover:bg-stone-50"
+                  }`}
+                  href={previousPageLink}
+                >
+                  上一页
+                </a>
+                <a
+                  aria-disabled={logPage.page >= logPage.totalPages}
+                  className={`rounded-md border px-3 py-2 ${
+                    logPage.page >= logPage.totalPages
+                      ? "pointer-events-none border-stone-200 text-stone-400"
+                      : "border-stone-300 text-stone-700 hover:bg-stone-50"
+                  }`}
+                  href={nextPageLink}
+                >
+                  下一页
+                </a>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

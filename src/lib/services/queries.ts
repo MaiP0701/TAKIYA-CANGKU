@@ -480,29 +480,54 @@ export async function getPaginatedInventoryList(
 
 export async function getInventoryLogs(user: SessionUser, filters: InventoryLogFilters) {
   const { locationIds } = await resolveAccessibleLocationIds(user, filters.locationId);
+  const where = {
+    locationId: {
+      in: locationIds
+    },
+    operationType: filters.type ? (filters.type as any) : undefined,
+    sourceModule: filters.sourceModule || undefined,
+    operatorId: filters.operatorId || undefined,
+    itemNameSnapshot: filters.query
+      ? {
+          contains: filters.query,
+          mode: "insensitive"
+        }
+      : undefined,
+    createdAt: {
+      gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+      lte: filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`) : undefined
+    }
+  } satisfies Prisma.InventoryChangeLogWhereInput;
 
   const logs = await prisma.inventoryChangeLog.findMany({
-    where: {
-      locationId: {
-        in: locationIds
+    where,
+    select: {
+      id: true,
+      transactionId: true,
+      operationType: true,
+      sourceModule: true,
+      itemId: true,
+      itemNameSnapshot: true,
+      locationId: true,
+      locationNameSnapshot: true,
+      quantityChange: true,
+      beforeQuantity: true,
+      afterQuantity: true,
+      unitNameSnapshot: true,
+      operatorId: true,
+      operatorNameSnapshot: true,
+      remark: true,
+      createdAt: true,
+      operator: {
+        select: {
+          displayName: true
+        }
       },
-      operationType: filters.type ? (filters.type as any) : undefined,
-      sourceModule: filters.sourceModule || undefined,
-      operatorId: filters.operatorId || undefined,
-      itemNameSnapshot: filters.query
-        ? {
-            contains: filters.query,
-            mode: "insensitive"
-          }
-        : undefined,
-      createdAt: {
-        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        lte: filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`) : undefined
+      transaction: {
+        select: {
+          transactionNo: true
+        }
       }
-    },
-    include: {
-      operator: true,
-      transaction: true
     },
     orderBy: {
       createdAt: "desc"
@@ -535,6 +560,101 @@ export async function getInventoryLogs(user: SessionUser, filters: InventoryLogF
 
 export async function getTransactions(user: SessionUser, filters: InventoryLogFilters) {
   return getInventoryLogs(user, filters);
+}
+
+export async function getPaginatedTransactions(
+  user: SessionUser,
+  filters: InventoryLogFilters,
+  options?: PaginationOptions
+) {
+  const { page, pageSize, skip } = sanitizePagination(options);
+  const { locationIds } = await resolveAccessibleLocationIds(user, filters.locationId);
+  const where = {
+    locationId: {
+      in: locationIds
+    },
+    operationType: filters.type ? (filters.type as any) : undefined,
+    sourceModule: filters.sourceModule || undefined,
+    operatorId: filters.operatorId || undefined,
+    itemNameSnapshot: filters.query
+      ? {
+          contains: filters.query,
+          mode: "insensitive"
+        }
+      : undefined,
+    createdAt: {
+      gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
+      lte: filters.dateTo ? new Date(`${filters.dateTo}T23:59:59`) : undefined
+    }
+  } satisfies Prisma.InventoryChangeLogWhereInput;
+
+  const [total, logs] = await Promise.all([
+    prisma.inventoryChangeLog.count({ where }),
+    prisma.inventoryChangeLog.findMany({
+      where,
+      select: {
+        id: true,
+        transactionId: true,
+        operationType: true,
+        sourceModule: true,
+        itemId: true,
+        itemNameSnapshot: true,
+        locationId: true,
+        locationNameSnapshot: true,
+        quantityChange: true,
+        beforeQuantity: true,
+        afterQuantity: true,
+        unitNameSnapshot: true,
+        operatorId: true,
+        operatorNameSnapshot: true,
+        remark: true,
+        createdAt: true,
+        operator: {
+          select: {
+            displayName: true
+          }
+        },
+        transaction: {
+          select: {
+            transactionNo: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      skip,
+      take: pageSize
+    })
+  ]);
+
+  return {
+    rows: logs.map((log) => ({
+      id: log.id,
+      transactionId: log.transactionId,
+      transactionNo: log.transaction.transactionNo,
+      operationType: log.operationType,
+      operationLabel: inventoryOperationLabels[log.operationType],
+      sourceModule: log.sourceModule,
+      sourceModuleLabel: sourceModuleLabels[log.sourceModule] ?? log.sourceModule,
+      itemId: log.itemId,
+      itemName: log.itemNameSnapshot,
+      locationId: log.locationId,
+      locationName: log.locationNameSnapshot,
+      quantityChange: toNumber(log.quantityChange) ?? 0,
+      beforeQuantity: toNumber(log.beforeQuantity) ?? 0,
+      afterQuantity: toNumber(log.afterQuantity) ?? 0,
+      unitName: log.unitNameSnapshot,
+      operatorId: log.operatorId,
+      operatorName: log.operatorNameSnapshot || log.operator.displayName,
+      remark: log.remark,
+      createdAt: log.createdAt.toISOString()
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize))
+  };
 }
 
 export async function getTransferTransactions(
