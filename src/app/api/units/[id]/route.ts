@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { getAdminApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError, jsonOk, readRequestBody, AppError } from "@/lib/api";
-import { revalidateManagedResource } from "@/lib/revalidate-paths";
+import { revalidateInventoryViews, revalidateManagedResource } from "@/lib/revalidate-paths";
 import { deleteUnit, updateUnit } from "@/lib/services/inventory";
 
 type RouteContext = {
@@ -52,6 +52,8 @@ export async function PATCH(request: Request, context: RouteContext) {
         body.isActive === undefined ? undefined : !(body.isActive === false || body.isActive === "false")
     });
     revalidateManagedResource("units", id);
+    revalidateManagedResource("items");
+    revalidateInventoryViews();
     return jsonOk(unit);
   } catch (error) {
     return jsonError(error);

@@ -94,7 +94,8 @@ export function UnitForm({ mode = "create", unit }: UnitFormProps) {
       });
 
       if (mode === "update") {
-        window.location.assign("/units");
+        setMessage("单位已保存，正在同步最新数据...");
+        router.refresh();
         return;
       } else {
         setMessage("单位已创建");

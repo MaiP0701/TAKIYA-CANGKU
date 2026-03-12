@@ -85,7 +85,8 @@ export function LocationForm({ mode = "create", location }: LocationFormProps) {
       });
 
       if (mode === "update") {
-        window.location.assign("/locations");
+        setMessage("地点已保存，正在同步最新数据...");
+        router.refresh();
         return;
       } else {
         setMessage("地点已创建");

@@ -127,7 +127,8 @@ export function ItemForm({
       });
 
       if (mode === "update") {
-        window.location.assign("/items");
+        setMessage("物料已保存，正在同步最新数据...");
+        router.refresh();
         return;
       } else {
         setMessage("物料已创建");

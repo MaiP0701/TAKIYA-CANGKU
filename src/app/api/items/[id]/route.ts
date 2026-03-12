@@ -82,6 +82,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         body.isActive === undefined ? undefined : !(body.isActive === false || body.isActive === "false")
     });
     revalidateManagedResource("items", id);
+    revalidateInventoryViews();
     return jsonOk(item);
   } catch (error) {
     return jsonError(error);

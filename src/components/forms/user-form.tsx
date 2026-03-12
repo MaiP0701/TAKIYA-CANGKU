@@ -113,7 +113,8 @@ export function UserForm({
       });
 
       if (mode === "update") {
-        window.location.assign("/users");
+        setMessage("用户已保存，正在同步最新数据...");
+        router.refresh();
         return;
       } else {
         setMessage("用户已创建");
