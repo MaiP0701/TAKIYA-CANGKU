@@ -1168,6 +1168,117 @@ export async function searchQuickAdjustItems(
   });
 }
 
+export async function getQuickAdjustCatalog(
+  user: SessionUser,
+  locationIds: string[]
+) {
+  const accessibleLocationIds = getScopedLocationIds(user, locationIds);
+
+  if (accessibleLocationIds.length === 0) {
+    return {
+      categories: [],
+      items: []
+    };
+  }
+
+  const items = await prisma.item.findMany({
+    where: {
+      isActive: true
+    },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      safetyStock: true,
+      alertEnabled: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true
+        }
+      },
+      baseUnit: {
+        select: {
+          name: true,
+          symbol: true
+        }
+      },
+      inventories: {
+        where: {
+          locationId: {
+            in: accessibleLocationIds
+          }
+        },
+        select: {
+          locationId: true,
+          quantity: true,
+          safetyStockOverride: true,
+          alertEnabledOverride: true
+        }
+      }
+    },
+    orderBy: [{ name: "asc" }]
+  });
+
+  const categories = Array.from(
+    new Map(
+      items.map((item) => [
+        item.category.id,
+        {
+          id: item.category.id,
+          name: item.category.name,
+          sortOrder: item.category.sortOrder
+        }
+      ])
+    ).values()
+  )
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+
+      return left.name.localeCompare(right.name, "zh-Hans-CN");
+    })
+    .map(({ id, name }) => ({
+      id,
+      name
+    }));
+
+  return {
+    categories,
+    items: items.map((item) => {
+      const inventoryByLocation = Object.fromEntries(
+        accessibleLocationIds.map((locationId) => {
+          const inventory = item.inventories.find((row) => row.locationId === locationId);
+          const quantity = toNumber(inventory?.quantity) ?? 0;
+          const threshold = toNumber(inventory?.safetyStockOverride ?? item.safetyStock) ?? 0;
+          const alertEnabled = inventory?.alertEnabledOverride ?? item.alertEnabled;
+
+          return [
+            locationId,
+            {
+              currentQuantity: quantity,
+              safetyStock: threshold,
+              isLowStock: lowStockValue(quantity, threshold, alertEnabled)
+            }
+          ];
+        })
+      );
+
+      return {
+        itemId: item.id,
+        itemName: item.name,
+        sku: item.sku,
+        categoryId: item.category.id,
+        categoryName: item.category.name,
+        unitName: item.baseUnit.symbol ?? item.baseUnit.name,
+        inventoryByLocation
+      };
+    })
+  };
+}
+
 export async function getQuickAdjustRecentItems(
   user: SessionUser,
   locationId: string,

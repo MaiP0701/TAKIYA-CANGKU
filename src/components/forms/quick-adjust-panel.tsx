@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,98 +18,87 @@ type LocationOption = {
   typeLabel: string;
 };
 
-type SearchItem = {
+type CategoryOption = {
+  id: string;
+  name: string;
+};
+
+type QuickAdjustItem = {
   itemId: string;
   itemName: string;
   sku: string;
+  categoryId: string;
   categoryName: string;
   unitName: string;
-  locationId: string;
-  currentQuantity: number;
-  safetyStock: number;
-  isLowStock: boolean;
+  inventoryByLocation: Record<
+    string,
+    {
+      currentQuantity: number;
+      safetyStock: number;
+      isLowStock: boolean;
+    }
+  >;
 };
 
 type QuickAdjustPanelProps = {
   locations: LocationOption[];
+  categories: CategoryOption[];
+  items: QuickAdjustItem[];
   defaultLocationId?: string | null;
 };
 
 export function QuickAdjustPanel({
   locations,
+  categories,
+  items,
   defaultLocationId
 }: QuickAdjustPanelProps) {
   const router = useRouter();
   const [locationId, setLocationId] = useState(defaultLocationId ?? locations[0]?.id ?? "");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchItem[]>([]);
-  const [recentItems, setRecentItems] = useState<SearchItem[]>([]);
-  const [selectedItem, setSelectedItem] = useState<SearchItem | null>(null);
+  const [categoryId, setCategoryId] = useState("");
+  const [selectedItemId, setSelectedItemId] = useState("");
   const [operationType, setOperationType] = useState<"INBOUND" | "OUTBOUND" | "DAMAGE" | "ADJUSTMENT">("OUTBOUND");
   const [adjustmentDirection, setAdjustmentDirection] = useState<"INCREASE" | "DECREASE">("DECREASE");
   const [quantity, setQuantity] = useState("");
   const [notes, setNotes] = useState("");
-  const [searchLoading, setSearchLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
-  const deferredQuery = useDeferredValue(query);
-  const selectedItemId = selectedItem?.itemId ?? null;
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function loadItems() {
-      if (!locationId) {
-        return;
-      }
-
-      setSearchLoading(true);
-      setError(null);
-
-      try {
-        const payload = await fetchJson<{
-          results: SearchItem[];
-          recentItems: SearchItem[];
-        }>(`/api/quick-adjust/search?locationId=${locationId}&query=${encodeURIComponent(deferredQuery)}`);
-
-        if (cancelled) {
-          return;
-        }
-
-        setResults(payload.results);
-        setRecentItems(payload.recentItems);
-
-        if (selectedItemId) {
-          const nextSelected =
-            payload.results.find((item) => item.itemId === selectedItemId) ??
-            payload.recentItems.find((item) => item.itemId === selectedItemId) ??
-            null;
-          setSelectedItem(nextSelected);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "加载物料失败");
-        }
-      } finally {
-        if (!cancelled) {
-          setSearchLoading(false);
-        }
-      }
+    if (!categoryId) {
+      setSelectedItemId("");
+      return;
     }
 
-    void loadItems();
-
-    return () => {
-      cancelled = true;
+    if (!items.some((item) => item.categoryId === categoryId && item.itemId === selectedItemId)) {
+      setSelectedItemId("");
     };
-  }, [deferredQuery, locationId, reloadToken, selectedItemId]);
+  }, [categoryId, items, selectedItemId]);
 
-  const displayedItems = useMemo(
-    () => (query.trim() ? results : recentItems.length > 0 ? recentItems : results),
-    [query, recentItems, results]
+  const filteredItems = useMemo(
+    () => items.filter((item) => item.categoryId === categoryId),
+    [categoryId, items]
   );
+
+  const selectedItem = useMemo(
+    () => filteredItems.find((item) => item.itemId === selectedItemId) ?? null,
+    [filteredItems, selectedItemId]
+  );
+
+  const selectedInventory = useMemo(() => {
+    if (!selectedItem || !locationId) {
+      return null;
+    }
+
+    return (
+      selectedItem.inventoryByLocation[locationId] ?? {
+        currentQuantity: 0,
+        safetyStock: 0,
+        isLowStock: false
+      }
+    );
+  }, [locationId, selectedItem]);
 
   const isDecreaseAction =
     operationType === "OUTBOUND" ||
@@ -117,8 +106,8 @@ export function QuickAdjustPanel({
     (operationType === "ADJUSTMENT" && adjustmentDirection === "DECREASE");
   const parsedQuantity = Number(quantity || 0);
   const insufficient =
-    selectedItem && isDecreaseAction && Number.isFinite(parsedQuantity)
-      ? parsedQuantity > selectedItem.currentQuantity
+    selectedInventory && isDecreaseAction && Number.isFinite(parsedQuantity)
+      ? parsedQuantity > selectedInventory.currentQuantity
       : false;
   const requireRemark =
     operationType === "DAMAGE" ||
@@ -177,7 +166,6 @@ export function QuickAdjustPanel({
       setQuantity("");
       setNotes("");
       setMessage("库存操作已完成");
-      setReloadToken((current) => current + 1);
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "提交失败");
@@ -206,17 +194,46 @@ export function QuickAdjustPanel({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-stone-700">搜索物料</label>
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="输入名称关键字，如：牛奶、珍珠、杯子"
-              />
-              <p className="text-xs text-stone-500">
-                {searchLoading ? "正在搜索..." : "支持即时模糊搜索，空输入时显示最近使用物料"}
-              </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-stone-700">物料分类</label>
+                <Select
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                >
+                  <option value="">请选择分类</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-stone-700">物料名称</label>
+                <Select
+                  disabled={!categoryId || filteredItems.length === 0}
+                  value={selectedItemId}
+                  onChange={(event) => setSelectedItemId(event.target.value)}
+                >
+                  <option value="">
+                    {!categoryId
+                      ? "请先选择分类"
+                      : filteredItems.length === 0
+                        ? "当前分类下暂无可用物料"
+                        : "请选择物料"}
+                  </option>
+                  {filteredItems.map((item) => (
+                    <option key={item.itemId} value={item.itemId}>
+                      {item.itemName} · {item.unitName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </div>
+            <p className="text-xs text-stone-500">
+              先选分类，再从该分类下选择物料。这样在 iPad 和手机端会比即时搜索更稳定。
+            </p>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-stone-700">操作类型</label>
@@ -282,8 +299,8 @@ export function QuickAdjustPanel({
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    <Badge variant={selectedItem.isLowStock ? "warning" : "success"}>
-                      {selectedItem.isLowStock ? "低库存" : "库存正常"}
+                    <Badge variant={selectedInventory?.isLowStock ? "warning" : "success"}>
+                      {selectedInventory?.isLowStock ? "低库存" : "库存正常"}
                     </Badge>
                   </div>
                 </div>
@@ -292,20 +309,20 @@ export function QuickAdjustPanel({
                   <div className="rounded-2xl bg-stone-100/70 px-4 py-3">
                     <div className="text-xs text-stone-500">当前库存</div>
                     <div className="mt-1 text-2xl font-semibold text-stone-900">
-                      {formatNumber(selectedItem.currentQuantity)}
+                      {formatNumber(selectedInventory?.currentQuantity ?? 0)}
                     </div>
                   </div>
                   <div className="rounded-2xl bg-stone-100/70 px-4 py-3">
                     <div className="text-xs text-stone-500">预警阈值</div>
                     <div className="mt-1 text-2xl font-semibold text-stone-900">
-                      {formatNumber(selectedItem.safetyStock)}
+                      {formatNumber(selectedInventory?.safetyStock ?? 0)}
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="rounded-[24px] bg-stone-100/70 px-4 py-6 text-sm text-stone-600">
-                先选择地点并搜索物料，再输入数量提交。
+                先选择地点、分类和物料，再输入数量提交。
               </div>
             )}
 
@@ -327,25 +344,38 @@ export function QuickAdjustPanel({
 
       <Card>
         <CardHeader>
-          <CardTitle>{query.trim() ? "搜索结果" : "最近使用物料"}</CardTitle>
-          <CardDescription>点击一项即可带入右侧操作表单</CardDescription>
+          <CardTitle>{categoryId ? "当前分类物料" : "物料选择说明"}</CardTitle>
+          <CardDescription>
+            {categoryId ? "点击一项即可带入左侧操作表单" : "先选择一个物料分类，再选择具体物料"}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {displayedItems.length === 0 ? (
+          {!categoryId ? (
             <div className="rounded-[24px] bg-stone-100/70 px-4 py-6 text-sm text-stone-600">
-              当前没有可展示的物料。
+              先在左侧选择物料分类，系统再展示该分类下的可操作物料。
+            </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="rounded-[24px] bg-stone-100/70 px-4 py-6 text-sm text-stone-600">
+              当前分类下没有可展示的启用物料。
             </div>
           ) : (
-            displayedItems.map((item) => (
+            filteredItems.map((item) => {
+              const inventory = item.inventoryByLocation[locationId] ?? {
+                currentQuantity: 0,
+                safetyStock: 0,
+                isLowStock: false
+              };
+
+              return (
               <button
-                key={`${item.itemId}-${item.locationId}`}
+                key={`${item.itemId}-${locationId}`}
                 type="button"
                 className={`w-full rounded-[24px] border p-4 text-left transition ${
-                  selectedItem?.itemId === item.itemId
+                  selectedItemId === item.itemId
                     ? "border-tea-300 bg-tea-50 shadow-sm"
                     : "border-white/70 bg-white/80 hover:bg-white"
                 }`}
-                onClick={() => setSelectedItem(item)}
+                onClick={() => setSelectedItemId(item.itemId)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -354,17 +384,18 @@ export function QuickAdjustPanel({
                       {item.categoryName} · {item.unitName}
                     </p>
                   </div>
-                  <Badge variant={item.isLowStock ? "warning" : "muted"}>
-                    {item.isLowStock ? "低库存" : "可操作"}
+                  <Badge variant={inventory.isLowStock ? "warning" : "muted"}>
+                    {inventory.isLowStock ? "低库存" : "可操作"}
                   </Badge>
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-stone-600">
-                  <span>当前库存 {formatNumber(item.currentQuantity)}</span>
-                  <span>预警阈值 {formatNumber(item.safetyStock)}</span>
+                  <span>当前库存 {formatNumber(inventory.currentQuantity)}</span>
+                  <span>预警阈值 {formatNumber(inventory.safetyStock)}</span>
                 </div>
               </button>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
