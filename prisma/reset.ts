@@ -1,14 +1,11 @@
 import { PrismaClient } from "@prisma/client";
-import { clearOperationalData, seedBaseData } from "./seed-core";
+import { clearOperationalData } from "./seed-core";
 
 const prisma = new PrismaClient();
 
 async function main() {
   await clearOperationalData(prisma);
-  const summary = await seedBaseData(prisma);
-
-  console.log("Seed completed with clean operational state.");
-  console.log(summary);
+  console.log("Operational demo data cleared.");
 }
 
 main()
