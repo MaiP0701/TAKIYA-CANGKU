@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getApiUserOrThrow } from "@/lib/auth/session";
 import { jsonError } from "@/lib/api";
 import { getInventoryList } from "@/lib/services/queries";
+import { formatDateTimeCompact } from "@/lib/utils";
 
 function escapeCsv(value: string | number | null | undefined) {
   const stringValue = value === null || value === undefined ? "" : String(value);
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
           escapeCsv(row.safetyStock),
           escapeCsv(row.isLowStock ? "低库存" : "正常"),
           escapeCsv(row.lastOperatorName ?? ""),
-          escapeCsv(row.lastTransactionAt ?? "")
+          escapeCsv(row.lastTransactionAt ? formatDateTimeCompact(row.lastTransactionAt) : "")
         ].join(",")
       )
     ];
